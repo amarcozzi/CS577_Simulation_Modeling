@@ -11,6 +11,9 @@ class Leath:
         self.cluster = {}
         self.world = np.zeros((N, N), dtype=np.int8)
         self.stop_flag = False
+        self.seed_cluster()
+        self.fig, self.ax = plt.subplots()
+        self.im = self.ax.imshow(self.world, cmap='GnBu')
 
     def seed_cluster(self, loc=None):
         if loc:
@@ -61,37 +64,31 @@ class Leath:
 
         # Update our world.
         if new_cluster_pts:
-            new_cluster_pts_x, new_cluster_pts_y = list(zip(*new_cluster_pts))[0], list(zip(*new_cluster_pts))[1]
+            zipped_cluster_points = list(zip(*new_cluster_pts))
+            new_cluster_pts_x, new_cluster_pts_y = zipped_cluster_points[0], zipped_cluster_points[1]
             self.world[new_cluster_pts_y, new_cluster_pts_x] = 1
         else:
             self.stop_flag = True
 
+    def animate_leath(self, display=False):
+        plt.axis('off')
+        anim = FuncAnimation(self.fig, self._animate,interval=100, frames=1000,
+                             repeat=False)
+        if display:
+            plt.show()
+        return anim
+
+    def _animate(self, i):
+
+        if leath.stop_flag:
+            return
+        else:
+            self.grow_cluster()
+
+        self.im.set_data(self.world)
+        self.ax.set_title(f'Leath Cluster at {i} Iterations')
+
 
 # Initialize a leath cluster
-leath = Leath(1000)
-leath.seed_cluster()
-
-# matplotlib initialization
-fig, ax = plt.subplots()
-im = ax.imshow(leath.world, cmap='GnBu')
-plt.axis('off')
-
-def animate(i):
-    if i == 0:
-        leath.seed_cluster()
-    elif leath.stop_flag:
-        return
-    else:
-        leath.grow_cluster()
-    im.set_data(leath.world)
-    ax.set_title(f'Leath Cluster at {i} Iterations')
-
-anim = FuncAnimation(fig, animate, interval=100, frames=1000, repeat=False)
-
-# for i in range(0, 10):
-#     leath.grow_cluster()
-#     plt.imshow(leath.world, cmap='terrain', vmin=0)
-#     plt.show()
-#     pass
-
-plt.show()
+leath = Leath()
+anim = leath.animate_leath(display=False)
