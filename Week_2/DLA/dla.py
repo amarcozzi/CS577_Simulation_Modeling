@@ -25,10 +25,17 @@ class DLA:
 
     def simulate(self):
         """ Performs a step in the DLA algorithm """
-        while self.start_radius < self.N // 2:
-            init_position = self._find_initial_position()
-            if not self.random_walk(init_position):
-                break
+        if self.start_radius <= self.N//2:
+            while True:
+                init_position = self._find_initial_position()
+
+                # Random walk was a success and a particle was added
+                if self.random_walk(init_position):
+                    return
+                # Restart the random walk with a new initial point
+                else:
+                    pass
+
 
     def random_walk(self, p):
         """ Performs a random walk for a particle randomly placed on the circumference of a circle """
@@ -40,7 +47,7 @@ class DLA:
 
             # Start new walker
             if r > self.max_radius:
-                return True
+                return False
 
             # Walk is finished
             neighbor_sum = self._neighbor_sum((x, y))
@@ -49,12 +56,12 @@ class DLA:
                 self.world[y, x] = 1
                 if r >= self.start_radius:
                     self.start_radius += 2
-                self.max_radius = self.start_radius + self.ring_size
-                return False
+                    self.max_radius = self.start_radius + self.ring_size
+                return True
 
             # Take a step
             else:
-                random_number = np.random.randint(3)
+                random_number = np.random.randint(4)
                 if random_number == 0 and x in range(2, self.N - 2):
                     x += 1
                 elif random_number == 1 and x in range(2, self.N - 2):
@@ -69,7 +76,6 @@ class DLA:
         theta = 2 * np.pi * np.random.rand()
         x = self.N // 2 + np.int(self.start_radius * np.cos(theta))
         y = self.N // 2 + np.int(self.start_radius * np.sin(theta))
-        self.starting_points[y, x] = 1
         return x, y
 
     def _neighbor_sum(self, pt):
@@ -83,26 +89,20 @@ class DLA:
         return s
 
 
-dla = DLA(N=200, start_radius=5)
+dla = DLA(start_radius=3)
 dla.seed_particle()
 
 fig, ax = plt.subplots()
-im = ax.imshow(dla.world, cmap='gray')
-plt.axis('off')
-
-fig2, ax2 = plt.subplots()
-im2 = ax2.imshow(dla.starting_points)
+im = ax.imshow(dla.world, cmap='PuRd')
 plt.axis('off')
 
 
 def animate(i):
     global dla
-    print(dla.start_radius)
     dla.simulate()
     im.set_data(dla.world)
-    im2.set_data(dla.starting_points)
     ax.set_title(f'DLA at {i} Iterations')
 
 
-anim = FuncAnimation(fig, animate, interval=100, frames=1000, repeat=False)
+anim = FuncAnimation(fig, animate, interval=20, frames=5000, repeat=False)
 plt.show()
