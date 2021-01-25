@@ -6,29 +6,45 @@ from matplotlib.animation import FuncAnimation
 class DLA:
     def __init__(self, N=80, start_radius=3):
         self.N = N
-        self.start_radius = start_radius
-        self.ring_size = N // 10
+        self.first_radius = start_radius
+        self.start_radius = self.first_radius
+        self.ring_size = self.N // 10
         self.max_radius = self.start_radius + self.ring_size
 
+        self.cluster = {}
         self.world = np.zeros((N, N), dtype=np.int8)
         self.num_particles = 0
-        self.starting_points = np.zeros((N, N), dtype=np.int8)
         self.stop_flag = False
 
     def seed_particle(self):
         """ Seeds the world with a single particle in the center"""
         pt = (self.N // 2, self.N // 2)
+        self.cluster[(self.N // 2, self.N // 2)] = 1
         self.num_particles += 1
         self.world[pt] = self.num_particles
 
+    def _reset(self):
+        self.start_radius = self.first_radius
+        self.ring_size = self.N // 10
+        self.max_radius = self.start_radius + self.ring_size
+
+        self.cluster = {}
+        self.world = np.zeros((self.N, self.N), dtype=np.int8)
+        self.num_particles = 0
+        self.stop_flag = False
+
+    def simulate(self):
+        """ Runs a DLA cluster until it reaches its end condition"""
+        self._reset()
+        self.seed_particle()
+        while not self.stop_flag:
+            self.add_particle()
+
     def add_particle(self):
         """ Performs a step in the DLA algorithm """
-        # Place particles
         if self.start_radius <= self.N // 2:
             while True:
-
                 init_position = self._find_initial_position()
-
                 # Random walk was a success and a particle was added
                 if self.random_walk(init_position):
                     return
@@ -50,7 +66,6 @@ class DLA:
 
             # If the particle is already in the cluster, try again and release a new particle
             if self.world[y, x] == 1:
-                print('Point already in cluster')
                 return False
 
             # Start new walker because it's not going the right direction
@@ -62,6 +77,7 @@ class DLA:
             if r < self.N // 2 and neighbor_sum > 0:
                 self.num_particles += 1
                 self.world[y, x] = 1
+                self.cluster[(x, y)] = 1
                 if r >= self.start_radius:
                     self.start_radius += 2
                 self.max_radius = self.start_radius + self.ring_size
@@ -95,6 +111,19 @@ class DLA:
         down = self.world[y + 1, x]
         s = right + left + up + down
         return s
+
+    def distance_from_center_of_mass(self):
+        # Loop through points in dictionary and create np array
+        list_of_pts = list()
+        for pt in self.cluster.keys():
+            list_of_pts.append(pt)
+        pts = np.array(list_of_pts, np.float32)
+
+        # Compute center of mass adjusted distances
+        cm_pts = pts - np.sum(pts, 0) / self.num_particles
+        r = np.sqrt(np.square(cm_pts[:, 0]) + np.square(cm_pts[:, 1]))
+
+        return r
 
 
 dla = DLA(N=300, start_radius=2)
