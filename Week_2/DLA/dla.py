@@ -21,7 +21,7 @@ class DLA:
         self.num_particles += 1
         self.world[pt] = self.num_particles
 
-    def simulate(self):
+    def add_particle(self):
         """ Performs a step in the DLA algorithm """
         # Place particles
         if self.start_radius <= self.N // 2:
@@ -109,7 +109,7 @@ def animate(i):
     global dla
     if dla.stop_flag:
         return
-    dla.simulate()
+    dla.add_particle()
     im.set_data(dla.world)
     ax.set_title(f'DLA with {dla.num_particles} Particles')
 
