@@ -13,20 +13,20 @@ class DLA:
         self.world = np.zeros((N, N), dtype=np.int8)
         self.num_particles = 0
         self.starting_points = np.zeros((N, N), dtype=np.int8)
+        self.stop_flag = False
 
-    def seed_particle(self, pt_loc=None):
+    def seed_particle(self):
         """ Seeds the world with a single particle in the center"""
-        if pt_loc:
-            pt = pt_loc
-        else:
-            pt = (self.N // 2, self.N // 2)
+        pt = (self.N // 2, self.N // 2)
         self.num_particles += 1
         self.world[pt] = self.num_particles
 
     def simulate(self):
         """ Performs a step in the DLA algorithm """
-        if self.start_radius <= self.N//2:
+        # Place particles
+        if self.start_radius <= self.N // 2:
             while True:
+
                 init_position = self._find_initial_position()
 
                 # Random walk was a success and a particle was added
@@ -35,31 +35,39 @@ class DLA:
                 # Restart the random walk with a new initial point
                 else:
                     pass
-
+        else:
+            self.stop_flag = True
 
     def random_walk(self, p):
         """ Performs a random walk for a particle randomly placed on the circumference of a circle """
+        # Starting point of the particle
         x, y = p
 
+        # Repeat the random walk until
         while True:
             r_squared = np.square(x - self.N // 2) + np.square(y - self.N // 2)
             r = 1 + np.int(np.sqrt(r_squared))
 
-            # Start new walker
+            # If the particle is already in the cluster, try again and release a new particle
+            if self.world[y, x] == 1:
+                print('Point already in cluster')
+                return False
+
+            # Start new walker because it's not going the right direction
             if r > self.max_radius:
                 return False
 
-            # Walk is finished
+            # The walk has hit the cluster, so add the particle and increment the starting radius
             neighbor_sum = self._neighbor_sum((x, y))
             if r < self.N // 2 and neighbor_sum > 0:
                 self.num_particles += 1
                 self.world[y, x] = 1
                 if r >= self.start_radius:
                     self.start_radius += 2
-                    self.max_radius = self.start_radius + self.ring_size
+                self.max_radius = self.start_radius + self.ring_size
                 return True
 
-            # Take a step
+            # Particle still hasn't hit the cluster, take a step
             else:
                 random_number = np.random.randint(4)
                 if random_number == 0 and x in range(2, self.N - 2):
@@ -89,7 +97,7 @@ class DLA:
         return s
 
 
-dla = DLA(start_radius=3)
+dla = DLA(N=300, start_radius=2)
 dla.seed_particle()
 
 fig, ax = plt.subplots()
@@ -99,9 +107,11 @@ plt.axis('off')
 
 def animate(i):
     global dla
+    if dla.stop_flag:
+        return
     dla.simulate()
     im.set_data(dla.world)
-    ax.set_title(f'DLA at {i} Iterations')
+    ax.set_title(f'DLA with {dla.num_particles} Particles')
 
 
 anim = FuncAnimation(fig, animate, interval=20, frames=5000, repeat=False)
