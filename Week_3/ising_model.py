@@ -103,12 +103,12 @@ ax[1, 1].plot(ising_demon_model.mcs, ising_demon_model.system_energy)
 def animate(i):
     ising_demon_model.perterb()
     ax[0, 0].imshow(ising_demon_model.lattice)
-    ax[0, 1].plot(ising_demon_model.mcs, ising_demon_model.magnetization)
-    ax[1, 0].plot(ising_demon_model.mcs, ising_demon_model.demon_energy)
-    ax[1, 1].plot(ising_demon_model.mcs, ising_demon_model.system_energy)
+    ax[0, 1].plot(ising_demon_model.mcs, ising_demon_model.magnetization, 'b.')
+    ax[1, 0].plot(ising_demon_model.mcs, ising_demon_model.demon_energy, 'b.')
+    ax[1, 1].plot(ising_demon_model.mcs, ising_demon_model.system_energy, 'b.')
 
 
-anim = FuncAnimation(fig, animate, interval=20, frames=100, repeat=False)
+anim = FuncAnimation(fig, animate, interval=1, frames=1000, repeat=False, blit=False)
 plt.show()
 pass
 
