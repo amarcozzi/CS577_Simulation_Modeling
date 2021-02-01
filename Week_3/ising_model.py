@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from scipy import signal
 
 
 class IsingDemon:
@@ -16,9 +15,11 @@ class IsingDemon:
 
         self.system_energy_accum = 0
         self.mag_accum = 0
+        self.mag_squared_accum = 0
         self.demon_energy_accum = 0
 
         self.magnetization_data = list()
+        self.mag_squared_data = list()
         self.system_energy_data = list()
         self.demon_energy_data = list()
         self.temp = list()
@@ -27,7 +28,7 @@ class IsingDemon:
         self.lattice = np.zeros([self.N, self.N], dtype=np.int8)
 
     def initialize_system(self):
-        """ Initalize a system to all + spins, """
+        """ Initialize a system to all + spins, """
         self.lattice = np.ones([self.N, self.N], dtype=np.int8)
 
         E = -self.N ** 2
@@ -36,8 +37,7 @@ class IsingDemon:
         # Try up to 10*N**2 times to flip spins so that the system has the desired energy
         while E < self.target:
             x, y = self._pick_random_site()
-            nn = self._sum_nearest_neighbors((x, y))
-            dE = 2 * self.lattice[y, x] * nn
+            dE = self._compute_change_energy((x, y))
 
             if dE > 0:
                 E += dE
@@ -46,10 +46,6 @@ class IsingDemon:
                 self.magnetization += 2 * new_spin
 
         self.system_energy = E
-        # self.magnetization_data.append(self.magnetization)
-        # self.system_energy_data.append(self.system_energy)
-        # self.demon_energy_data.append(self.demon_energy)
-        # self.temp.append(None)
 
     def reset(self):
         """ Resets the simulation """
@@ -59,9 +55,11 @@ class IsingDemon:
 
         self.system_energy_accum = 0
         self.mag_accum = 0
+        self.mag_squared_accum = 0
         self.demon_energy_accum = 0
 
         self.magnetization_data = list()
+        self.mag_squared_data = list()
         self.system_energy_data = list()
         self.demon_energy_data = list()
         self.temp = list()
@@ -73,11 +71,11 @@ class IsingDemon:
         """ Randomly perturbs N^2 sights, and computes the system's change in energy """
         self.mcs += 1
         for i in range(0, self.N ** 2):
+            # Pick a random site to perterb
             x, y = self._pick_random_site()
 
             # Flip the spin and compute the change in energy, delta E
-            nn = self._sum_nearest_neighbors((x, y))
-            dE = 2 * self.lattice[y, x] * nn
+            dE = self._compute_change_energy((x, y))
 
             # System gives the energy to the demon, accepts change
             if dE <= self.demon_energy:
@@ -87,60 +85,41 @@ class IsingDemon:
                 self.system_energy += dE
                 self.magnetization += 2 * new_spin
 
-            # System takes the energy from the demon, accepts change
-            # elif 0 < dE <= self.demon_energy:
-            #     self.demon_energy -= np.abs(dE)
-            #     self.system_energy += np.abs(dE)
-            #     self.magnetization += 2 * new_spin
-            #     self.lattice[y, x] = new_spin
-
+        # Update total values
         self.system_energy_accum += self.system_energy
         self.demon_energy_accum += self.demon_energy
         self.mag_accum += self.magnetization
+        self.mag_squared_accum += self.magnetization**2
 
+        # Add values to lists for plotting
         self.magnetization_data.append(self.mag_accum / self.mcs)
+        self.mag_squared_data.append(self.mag_squared_accum / self.mcs)
         self.system_energy_data.append(self.system_energy_accum / self.mcs)
         self.demon_energy_data.append(self.demon_energy_accum / self.mcs)
         self.temp.append(self.temperature())
 
     def temperature(self):
-        return 4.0 / np.log(1.0 + (4.0 * self.mcs * self.N * self.N) / self.demon_energy_accum)
+        """ Computes the temperature of the system """
+        if self.demon_energy_accum == 0:
+            return 0.0
+        else:
+            return 4.0 / np.log(1.0 + (4.0 * self.mcs * self.N * self.N) / self.demon_energy_accum)
+
+    def _compute_change_energy(self, point):
+        """ Computes the energy at any point on the lattice """
+        x, y = point
+        nn = self._sum_nearest_neighbors(point)
+        return 2 * self.lattice[y, x] * nn
 
     def _sum_nearest_neighbors(self, point):
         """ Computes the nearest neighbors of a point """
         x, y = point
-        nn_sum = 0
+        right = self.lattice[y, (x + 1) % self.N]
+        left = self.lattice[y, (x - 1) % self.N]
+        up = self.lattice[(y - 1) % self.N, x]
+        down = self.lattice[(y + 1) % self.N, x]
 
-        if x + 1 in range(0, self.N):
-            nn_sum += self.lattice[y, x + 1]
-        else:
-            nn_sum += self.lattice[y, 0]
-
-        if x - 1 in range(0, self.N):
-            nn_sum += self.lattice[y, x - 1]
-        else:
-            nn_sum += self.lattice[y, self.N - 1]
-
-        if y + 1 in range(0, self.N):
-            nn_sum += self.lattice[y + 1, x]
-        else:
-            nn_sum += self.lattice[0, x]
-
-        if y - 1 in range(0, self.N):
-            nn_sum += self.lattice[y - 1, x]
-        else:
-            nn_sum += self.lattice[self.N - 1, x]
-
-        return nn_sum
-
-    def _sum_lattice_nearest_neighbors(self):
-        """ Uses Convolve 2D to sum all of the lattice nearest neighbors (with periodic boundary) """
-        k = [[0, 1, 0],
-             [1, 0, 1],
-             [0, 1, 0]
-             ]
-        nn = signal.convolve2d(self.lattice, k, mode='same', boundary='wrap')
-        return np.sum(nn)
+        return right + left + up + down
 
     def _pick_random_site(self):
         """ Returns a random point on the lattice """
@@ -150,7 +129,7 @@ class IsingDemon:
 
 
 # Create an Ising model with a Demon
-ising_model = IsingDemon(50, -1000)
+ising_model = IsingDemon(50, 5000)
 ising_model.initialize_system()
 
 # Initialize the dashboard
@@ -159,6 +138,7 @@ im = ax[0, 0].imshow(ising_model.lattice, cmap='Greys')
 temp_line, = ax[0, 1].plot([], [], lw=3)
 mag_line, = ax[1, 0].plot([], [], lw=3)
 sys_energy_line, = ax[1, 1].plot([], [], lw=3)
+ax[0, 0].set_title('System')
 ax[0, 1].set_title('Temperature')
 ax[1, 0].set_title('Magnetization')
 ax[1, 1].set_title('System Energy')
@@ -166,14 +146,17 @@ ax[1, 1].set_title('System Energy')
 
 # Define the animation for the ising/demon model dashboard
 def animate(i):
+    # Run a step in the simulation and display the simulation image
     ising_model.perterb()
     im.set_data(ising_model.lattice)
-    x_data = np.arange(1, ising_model.mcs + 1)
 
+    # Plot temp, magnetism, and system energy over monte carlo steps
+    x_data = np.arange(1, ising_model.mcs + 1)
     temp_line.set_data(x_data, ising_model.temp)
     mag_line.set_data(x_data, ising_model.magnetization_data)
     sys_energy_line.set_data(x_data, ising_model.system_energy_data)
 
+    # Reset the scale and limits of the plots
     ax[0, 0].relim()
     ax[0, 0].autoscale_view(True, True, True)
     ax[0, 1].relim()
@@ -185,6 +168,5 @@ def animate(i):
 
 
 # Animate the ising demon model
-anim = FuncAnimation(fig, animate, interval=1, frames=1000, repeat=False, blit=False)
+anim = FuncAnimation(fig, animate, interval=1, frames=250, repeat=False)
 plt.show()
-
