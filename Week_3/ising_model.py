@@ -12,6 +12,7 @@ class IsingDemon:
         self.demon_energy = 0
         self.system_energy = 0
         self.magnetization = 0
+        self.temp = 0
 
         self.system_energy_accum = 0
         self.mag_accum = 0
@@ -22,7 +23,11 @@ class IsingDemon:
         self.mag_squared_data = list()
         self.system_energy_data = list()
         self.demon_energy_data = list()
-        self.temp = list()
+        self.temp_data = list()
+
+        self.mag_data_avg = list()
+        self.mag_squared_data_avg = list()
+        self.system_energy_data_avg = list()
 
         self.mcs = 0
         self.lattice = np.zeros([self.N, self.N], dtype=np.int8)
@@ -47,26 +52,6 @@ class IsingDemon:
 
         self.system_energy = E
 
-    def reset(self):
-        """ Resets the simulation """
-        self.demon_energy = 0
-        self.system_energy = 0
-        self.magnetization = 0
-
-        self.system_energy_accum = 0
-        self.mag_accum = 0
-        self.mag_squared_accum = 0
-        self.demon_energy_accum = 0
-
-        self.magnetization_data = list()
-        self.mag_squared_data = list()
-        self.system_energy_data = list()
-        self.demon_energy_data = list()
-        self.temp = list()
-
-        self.mcs = 0
-        self.lattice = np.zeros([self.N, self.N])
-
     def perterb(self):
         """ Randomly perturbs N^2 sights, and computes the system's change in energy """
         self.mcs += 1
@@ -85,25 +70,27 @@ class IsingDemon:
                 self.system_energy += dE
                 self.magnetization += 2 * new_spin
 
-        # Update total values
+            # Update values
+            self.demon_energy_accum += self.demon_energy
+
         self.system_energy_accum += self.system_energy
-        self.demon_energy_accum += self.demon_energy
         self.mag_accum += self.magnetization
-        self.mag_squared_accum += self.magnetization**2
+        self.mag_squared_accum += self.magnetization ** 2
 
         # Add values to lists for plotting
-        self.magnetization_data.append(self.mag_accum / self.mcs)
-        self.mag_squared_data.append(self.mag_squared_accum / self.mcs)
-        self.system_energy_data.append(self.system_energy_accum / self.mcs)
-        self.demon_energy_data.append(self.demon_energy_accum / self.mcs)
-        self.temp.append(self.temperature())
+        self.magnetization_data.append(self.magnetization)
+        self.mag_squared_data.append(self.magnetization ** 2)
+        self.system_energy_data.append(self.system_energy)
+        self.demon_energy_data.append(self.demon_energy)
+        self.temp_data.append(self._compute_temperature())
 
-    def temperature(self):
+        self.mag_data_avg.append(self.mag_accum / self.mcs)
+        self.mag_squared_data_avg.append(self.mag_squared_accum / self.mcs)
+        self.system_energy_data_avg.append(self.system_energy_accum / self.mcs)
+
+    def _compute_temperature(self):
         """ Computes the temperature of the system """
-        if self.demon_energy_accum == 0:
-            return 0.0
-        else:
-            return 4.0 / np.log(1.0 + (4.0 * self.mcs * self.N * self.N) / self.demon_energy_accum)
+        return 4.0 / np.log(1.0 + 4.0 / (self.demon_energy_accum / (self.mcs * self.N ** 2)))
 
     def _compute_change_energy(self, point):
         """ Computes the energy at any point on the lattice """
@@ -129,7 +116,7 @@ class IsingDemon:
 
 
 # Create an Ising model with a Demon
-ising_model = IsingDemon(50, 5000)
+ising_model = IsingDemon(50, -100)
 ising_model.initialize_system()
 
 # Initialize the dashboard
@@ -150,11 +137,11 @@ def animate(i):
     ising_model.perterb()
     im.set_data(ising_model.lattice)
 
-    # Plot temp, magnetism, and system energy over monte carlo steps
+    # Plot temp_data, magnetism, and system energy over monte carlo steps
     x_data = np.arange(1, ising_model.mcs + 1)
-    temp_line.set_data(x_data, ising_model.temp)
-    mag_line.set_data(x_data, ising_model.magnetization_data)
-    sys_energy_line.set_data(x_data, ising_model.system_energy_data)
+    temp_line.set_data(x_data, ising_model.temp_data)
+    mag_line.set_data(x_data, ising_model.mag_data_avg)
+    sys_energy_line.set_data(x_data, ising_model.system_energy_data_avg)
 
     # Reset the scale and limits of the plots
     ax[0, 0].relim()
