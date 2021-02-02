@@ -19,7 +19,7 @@ class IsingDemon:
         self.mag_squared_accum = 0
         self.demon_energy_accum = 0
 
-        self.magnetization_data = list()
+        self.mag_data = list()
         self.mag_squared_data = list()
         self.system_energy_data = list()
         self.demon_energy_data = list()
@@ -28,6 +28,7 @@ class IsingDemon:
         self.mag_data_avg = list()
         self.mag_squared_data_avg = list()
         self.system_energy_data_avg = list()
+        self.demon_energy_data_avg = list()
 
         self.mcs = 0
         self.lattice = np.zeros([self.N, self.N], dtype=np.int8)
@@ -78,7 +79,7 @@ class IsingDemon:
         self.mag_squared_accum += self.magnetization ** 2
 
         # Add values to lists for plotting
-        self.magnetization_data.append(self.magnetization)
+        self.mag_data.append(self.magnetization)
         self.mag_squared_data.append(self.magnetization ** 2)
         self.system_energy_data.append(self.system_energy)
         self.demon_energy_data.append(self.demon_energy)
@@ -87,6 +88,7 @@ class IsingDemon:
         self.mag_data_avg.append(self.mag_accum / self.mcs)
         self.mag_squared_data_avg.append(self.mag_squared_accum / self.mcs)
         self.system_energy_data_avg.append(self.system_energy_accum / self.mcs)
+        self.demon_energy_data_avg.append(self.demon_energy_accum / self.mcs)
 
     def _compute_temperature(self):
         """ Computes the temperature of the system """
