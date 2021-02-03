@@ -20,6 +20,8 @@ class IsingMCMC:
         # Initialize lists to store raw data over time (aka monte carlo steps)
         self.energy_data = list()
         self.mag_data = list()
+        self.energy_data_avg = list()
+        self.mag_data_avg = list()
 
         self.mcs = 0
         self.accepted_moves = 0
@@ -28,6 +30,17 @@ class IsingMCMC:
     def initialize_system(self):
         """ Initializes a lattice of size N x N to all ones (aka spin up) """
         self.lattice = np.ones([self.N, self.N])  # all spins up
+        self.mag = self.N * self.N  # sum of spins
+        self.energy = -2 * self.N * self.N  # minimum energy
+        self._reset_data()
+
+        # Boltzmann factors for some reason?
+        self.w[8] = np.exp(-8.0 / self.temp)
+        self.w[4] = np.exp(-4.0 / self.temp)
+
+    def initialize_system_randomly(self):
+        """ Initializes a lattice of size N x N to all ones (aka spin up) """
+        self.lattice = np.random.randint(0, 2, size=[self.N, self.N])  # all spins up
         self.mag = self.N * self.N  # sum of spins
         self.energy = -2 * self.N * self.N  # minimum energy
         self._reset_data()
@@ -77,6 +90,8 @@ class IsingMCMC:
                 self.energy += dE
                 self.mag += 2 * new_spin
 
+        self.mcs += 1
+
         # Update accumulators
         self.energy_accum += self.energy
         self.energy_squared_accum += self.energy * self.energy
@@ -87,7 +102,10 @@ class IsingMCMC:
         self.energy_data.append(self.energy)
         self.mag_data.append(self.mag)
 
-        self.mcs += 1
+        # Add average values to storage lists
+        self.energy_data_avg.append(self.energy_accum / self.mcs)
+        self.mag_data_avg.append(self.mag_accum / self.mcs)
+
 
     def _compute_change_energy(self, point):
         """ Computes the energy at any point on the lattice """
@@ -114,7 +132,7 @@ class IsingMCMC:
 
 # Begin by running an Ising MCMC model to equilibrum
 model = IsingMCMC(N=32, T=2.0)
-model.initialize_system()
+model.initialize_system_randomly()
 for k in range(5000):
     model.do_one_MC_step()
 
