@@ -1,5 +1,6 @@
+import matplotlib.pyplot as plt
 import numpy as np
-
+from matplotlib.animation import FuncAnimation
 
 
 class Cloth:
@@ -14,6 +15,8 @@ class Cloth:
         self.g = 9.8  # gravitational acceleration, note sign!
         self.kT = kT  # Temperature appearing in Boltzmann factor, this should be changed through runs.
         self.E = 0  # Initial energy
+        self.E_data = list()  # Track energy over time
+        self.E_data.append(self.E)  # Add starting energy to data
         self.step = 0  # Starting mc steps
 
         # Initialize lattice. Lattice is a dictionary with coordinate tuple (i, j) as the key
@@ -22,7 +25,6 @@ class Cloth:
         for i in range(0, self.N):
             for j in range(0, self.N):
                 self.lattice[(i, j)] = np.array([i * self.length, j * self.length, self.z], dtype=np.float64)
-                pass
 
     def do_mcmc_step(self):
         for i in range(self.N ** 2):
@@ -30,7 +32,8 @@ class Cloth:
             if dE < 0 or np.random.rand() < np.exp(-dE / self.kT):
                 self.lattice[pt] += dr
                 self.E += dE
-            self.step += 1
+        self.E_data.append(self.E)
+        self.step += 1
 
     def perturb(self):
         """ Picks a random, non-corner point, and perturbs that point in the x, y, or z direction """
@@ -47,7 +50,7 @@ class Cloth:
             dz = np.random.randn() * 2 * self.sigma
 
         # change in position due to the perturbing
-        dr = (dx, dy, dz)
+        dr = np.array([dx, dy, dz])
 
         # Compute the change in energy as a result of perturbation
         dE = self.calc_dE(pt, dr)
@@ -66,28 +69,29 @@ class Cloth:
         # sum in delta E
         energy_sum = 0
         for n in nn:
-            nr = self.lattice[n]
-            dp = np.linalg.norm(rp - nr)
-            d = np.linalg.norm(r - nr)
-            energy_sum += np.square(dp - self.length) - np.square(d - self.length)
+            nr = self.lattice[n]    # position of nearest neighbor
+            dp = np.linalg.norm(rp - nr)    # distance between r' and nearest neighbor
+            d = np.linalg.norm(r - nr)      # distance between r and nearest neighbor
+            energy = np.square(dp - self.length) - np.square(d - self.length)
+            energy_sum += energy
+            pass
 
-        dE = -(1/2) * self.k * energy_sum + self.m * self.g * dr[2]
+        dE = (1 / 2) * self.k * energy_sum + (self.m * self.g * dr[2])
 
         return dE
 
-    def plot_cloth(self):
+    def get_world_coords(self):
         """ Plots the cloth """
-        X = list()
-        Y = list()
-        Z = list()
-        world_coords = self.lattice.values()
+        x = list()
+        y = list()
+        z = list()
+        world_coords = list(self.lattice.values())
         for i in range(len(world_coords)):
-            X.append(world_coords[i][0])
-            Y.append(world_coords[i][1])
-            Z.append(world_coords[i][2])
+            x.append(world_coords[i][0])
+            y.append(world_coords[i][1])
+            z.append(world_coords[i][2])
 
-        plt.w
-
+        return np.array(x), np.array(y), np.array(z)
 
     def _get_nn(self, pt):
         """ Returns a list of nearest neighbors of point """
@@ -131,7 +135,29 @@ class Cloth:
             return False
 
 
-cloth = Cloth()
-for i in range(500):
+cloth = Cloth(N=16)
+
+for k in range(1000):
     cloth.do_mcmc_step()
-    cloth.plot_cloth()
+    pass
+
+# fig, ax = plt.subplots()
+# energy_line, = ax.plot([], [], lw=3)
+# ax.set_title('Energy vs. Time')
+#
+#
+# def animate(i):
+#     cloth.do_mcmc_step()
+#     energy_line.set_data(range(cloth.step + 1), cloth.E_data)
+#     ax.relim()
+#     ax.autoscale_view(True, True, True)
+#
+#
+# anim = FuncAnimation(fig, animate, interval=10, frames=200, repeat=False)
+# plt.show()
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+X, Y, Z = cloth.get_world_coords()
+plot3d = ax.plot_trisurf(X, Y, Z)
+plt.show()
