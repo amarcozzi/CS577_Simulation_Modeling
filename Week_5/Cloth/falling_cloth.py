@@ -15,16 +15,20 @@ class Cloth:
         self.g = 9.8  # gravitational acceleration, note sign!
         self.kT = kT  # Temperature appearing in Boltzmann factor, this should be changed through runs.
         self.E = 0  # Initial energy
+        self.step = 0  # Starting mc steps
         self.E_data = list()  # Track energy over time
         self.E_data.append(self.E)  # Add starting energy to data
-        self.step = 0  # Starting mc steps
 
         # Initialize lattice. Lattice is a dictionary with coordinate tuple (i, j) as the key
-        # with 3D coordinates np array (x, y, z) as the position.
+        # with 3D coordinates np array [x, y, z] as the position.
         self.lattice = dict()
         for i in range(0, self.N):
             for j in range(0, self.N):
                 self.lattice[(i, j)] = np.array([i * self.length, j * self.length, self.z], dtype=np.float64)
+
+        # Want to add a set of points to be stationary. This would be equivalent to either holding the cloth
+        # at the corners, pinching the cloth somewhere, or dropping the cloth onto an object
+
 
     def do_mcmc_step(self):
         for i in range(self.N ** 2):
@@ -135,29 +139,17 @@ class Cloth:
             return False
 
 
-cloth = Cloth(N=16)
+cloth = Cloth(N=64)
+X, Y, Z = cloth.get_world_coords()
 
-for k in range(1000):
+for k in range(100):
     cloth.do_mcmc_step()
     pass
 
-# fig, ax = plt.subplots()
-# energy_line, = ax.plot([], [], lw=3)
-# ax.set_title('Energy vs. Time')
-#
-#
-# def animate(i):
-#     cloth.do_mcmc_step()
-#     energy_line.set_data(range(cloth.step + 1), cloth.E_data)
-#     ax.relim()
-#     ax.autoscale_view(True, True, True)
-#
-#
-# anim = FuncAnimation(fig, animate, interval=10, frames=200, repeat=False)
-# plt.show()
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 X, Y, Z = cloth.get_world_coords()
 plot3d = ax.plot_trisurf(X, Y, Z)
+# plot3d = ax.scatter(X, Y, Z)
 plt.show()
