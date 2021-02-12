@@ -4,8 +4,11 @@ from matplotlib.animation import FuncAnimation
 
 
 class Cloth:
-    def __init__(self, N=16, kT=1e-3):
+    def __init__(self, static_pts, N=16, kT=1e-3, thresh=0.01, cooling_steps=3):
         # Initialize constants/input parameters
+        self.static_pts = static_pts
+        self.thresh = thresh
+        self.end_flag = False
         self.N = N  # Number of masses per side.
         self.k = 50  # Spring constant
         self.length = 1  # Spring equilibrium length
@@ -18,6 +21,10 @@ class Cloth:
         self.step = 0  # Starting mc steps
         self.E_data = list()  # Track energy over time
         self.E_data.append(self.E)  # Add starting energy to data
+        self.E_change = list()
+
+        # Set up cooling schedule
+        cooling_s
 
         # Initialize lattice. Lattice is a dictionary with coordinate tuple (i, j) as the key
         # with 3D coordinates np array [x, y, z] as the position.
@@ -29,6 +36,11 @@ class Cloth:
         # Want to add a set of points to be stationary. This would be equivalent to either holding the cloth
         # at the corners, pinching the cloth somewhere, or dropping the cloth onto an object
 
+    def simulate(self):
+        """ Runs the simulation until the threshold condition is met """
+        while not self.end_flag:
+            self.do_mcmc_step()
+        print(f'Simulation finished after {self.step} MCMC steps')
 
     def do_mcmc_step(self):
         for i in range(self.N ** 2):
@@ -36,8 +48,20 @@ class Cloth:
             if dE < 0 or np.random.rand() < np.exp(-dE / self.kT):
                 self.lattice[pt] += dr
                 self.E += dE
-        self.E_data.append(self.E)
         self.step += 1
+        # Record E in list
+        self.E_data.append(self.E)
+        if self.step > 1:
+            # compute percentage change in E
+            change = (self.E_data[self.step] - self.E_data[self.step - 1]) / self.E_data[self.step - 1]
+            self.E_change.append(change)
+            if self.step > 5:
+                # Stop the simulation if the threshold is reached
+                test_value = abs(sum(self.E_change[-5:-1]))
+                if test_value < self.thresh:
+                    self.end_flag = True
+                else:
+                    pass
 
     def perturb(self):
         """ Picks a random, non-corner point, and perturbs that point in the x, y, or z direction """
@@ -73,9 +97,9 @@ class Cloth:
         # sum in delta E
         energy_sum = 0
         for n in nn:
-            nr = self.lattice[n]    # position of nearest neighbor
-            dp = np.linalg.norm(rp - nr)    # distance between r' and nearest neighbor
-            d = np.linalg.norm(r - nr)      # distance between r and nearest neighbor
+            nr = self.lattice[n]  # position of nearest neighbor
+            dp = np.linalg.norm(rp - nr)  # distance between r' and nearest neighbor
+            d = np.linalg.norm(r - nr)  # distance between r and nearest neighbor
             energy = np.square(dp - self.length) - np.square(d - self.length)
             energy_sum += energy
             pass
@@ -119,37 +143,30 @@ class Cloth:
         """ Returns a random point on the lattice """
         i = np.random.randint(0, self.N)
         j = np.random.randint(0, self.N)
-        while self._is_corner(i, j):
+        while self._is_static((i, j)):
             i = np.random.randint(0, self.N)
             j = np.random.randint(0, self.N)
 
         return i, j
 
-    def _is_corner(self, i, j):
-        """ Returns true if pt is a corner point, false otherwise """
-        if i == 0 and j == 0:
-            return True
-        elif i == 0 and j == self.N - 1:
-            return True
-        elif i == self.N - 1 and j == 0:
-            return True
-        elif i == self.N - 1 and j == self.N - 1:
+    def _is_static(self, pt):
+        """ Returns true if pt is in the set of static points, false otherwise """
+        if pt in self.static_pts:
             return True
         else:
             return False
 
 
-cloth = Cloth(N=64)
-X, Y, Z = cloth.get_world_coords()
-
-for k in range(100):
-    cloth.do_mcmc_step()
-    pass
-
+L = 16
+corners = {(0, 0): None,
+           (0, L - 1): None,
+           (L - 1, 0): None,
+           (L - 1, L - 1): None}
+cloth = Cloth(corners, N=L, thresh=0.01, cooling_steps=3)
+cloth.simulate()
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 X, Y, Z = cloth.get_world_coords()
-plot3d = ax.plot_trisurf(X, Y, Z)
-# plot3d = ax.scatter(X, Y, Z)
+wf_plot = ax.plot_wireframe(X.reshape(cloth.N, cloth.N).T, Y.reshape(cloth.N, cloth.N).T, Z.reshape(cloth.N, cloth.N).T)
 plt.show()
