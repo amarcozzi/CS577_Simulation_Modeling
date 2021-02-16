@@ -1,10 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FuncAnimation
 
 
 class Cloth:
-    def __init__(self, static_pts, N=16, kT=1e-3, thresh=0.01, cooling_steps=3):
+    def __init__(self, static_pts, N=16, kT=1e-3, thresh=0.01):
         # Initialize constants/input parameters
         self.static_pts = static_pts
         self.thresh = thresh
@@ -23,24 +22,43 @@ class Cloth:
         self.E_data.append(self.E)  # Add starting energy to data
         self.E_change = list()
 
-        # Set up cooling schedule
-        cooling_s
-
         # Initialize lattice. Lattice is a dictionary with coordinate tuple (i, j) as the key
-        # with 3D coordinates np array [x, y, z] as the position.
+        # with 3D coordinates np array [x_points, y, z] as the position.
         self.lattice = dict()
         for i in range(0, self.N):
             for j in range(0, self.N):
                 self.lattice[(i, j)] = np.array([i * self.length, j * self.length, self.z], dtype=np.float64)
-
-        # Want to add a set of points to be stationary. This would be equivalent to either holding the cloth
-        # at the corners, pinching the cloth somewhere, or dropping the cloth onto an object
 
     def simulate(self):
         """ Runs the simulation until the threshold condition is met """
         while not self.end_flag:
             self.do_mcmc_step()
         print(f'Simulation finished after {self.step} MCMC steps')
+
+    def simulate_with_cooling(self, n_cooling_steps=3):
+        """ Takes in an integer which tells the simulation how many cooling steps to take. Each time that
+            the simulation reaches equilibrium, the temperature is halved until the total number of cooling
+            steps is reached. The function outputs a dict of the cloth position at each temperature's
+            equilibrium """
+        cooling_step = 0
+        equilibrium_data = dict()
+        while cooling_step <= n_cooling_steps:
+            while not self.end_flag:
+                # Run the simulation to equilibrium
+                self.do_mcmc_step()
+
+            # Add data to a dictionary to be returned for plotting
+            X, Y, Z = self.get_world_coords()
+            step_data = [self.kT, self.step, X, Y, Z]
+            equilibrium_data[cooling_step] = step_data
+
+            # reset simulation end flag, and halve the temperature
+            self.end_flag = False
+            self.kT /= 2
+            self.thresh /= 4
+            cooling_step += 1
+
+        return equilibrium_data
 
     def do_mcmc_step(self):
         for i in range(self.N ** 2):
@@ -64,7 +82,7 @@ class Cloth:
                     pass
 
     def perturb(self):
-        """ Picks a random, non-corner point, and perturbs that point in the x, y, or z direction """
+        """ Picks a random, non-corner point, and perturbs that point in the x_points, y, or z direction """
         pt = self._pick_random_point()
 
         # pick random direction / quantity to perturb
@@ -162,11 +180,37 @@ corners = {(0, 0): None,
            (0, L - 1): None,
            (L - 1, 0): None,
            (L - 1, L - 1): None}
-cloth = Cloth(corners, N=L, thresh=0.01, cooling_steps=3)
+cloth = Cloth(corners, kT=1e-3, N=L, thresh=1e-6)
 cloth.simulate()
+data = cloth.simulate_with_cooling(3)
 
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-X, Y, Z = cloth.get_world_coords()
-wf_plot = ax.plot_wireframe(X.reshape(cloth.N, cloth.N).T, Y.reshape(cloth.N, cloth.N).T, Z.reshape(cloth.N, cloth.N).T)
+fig = plt.figure(figsize=(7, 4))
+ax1 = fig.add_subplot(221, projection='3d')
+kt1, steps_1 = data[0][0], data[0][1]
+x1, y1, z1 = data[0][2], data[0][3], data[0][4]
+ax1.plot_wireframe(x1.reshape(cloth.N, cloth.N).T, y1.reshape(cloth.N, cloth.N).T,
+                   z1.reshape(cloth.N, cloth.N).T)
+ax1.set_title(f'{steps_1} steps with kT {kt1}')
+ax2 = fig.add_subplot(222, projection='3d')
+
+kt2, steps_2 = data[1][0], data[1][1]
+x2, y2, z2 = data[1][2], data[1][3], data[1][4]
+ax2.plot_wireframe(x2.reshape(cloth.N, cloth.N).T, y2.reshape(cloth.N, cloth.N).T,
+                   z2.reshape(cloth.N, cloth.N).T)
+ax2.set_title(f'{steps_2} steps with kT {kt2}')
+
+ax3 = fig.add_subplot(223, projection='3d')
+kt3, steps_3 = data[2][0], data[2][1]
+x3, y3, z3 = data[2][2], data[2][3], data[2][4]
+ax3.plot_wireframe(x3.reshape(cloth.N, cloth.N).T, y3.reshape(cloth.N, cloth.N).T,
+                   z3.reshape(cloth.N, cloth.N).T)
+ax3.set_title(f'{steps_3} steps with kT {kt3}')
+
+ax4 = fig.add_subplot(224, projection='3d')
+kt4, steps_4 = data[3][0], data[3][1]
+x4, y4, z4 = data[3][2], data[3][3], data[3][4]
+ax4.plot_wireframe(x4.reshape(cloth.N, cloth.N).T, y4.reshape(cloth.N, cloth.N).T,
+                   z4.reshape(cloth.N, cloth.N).T)
+ax4.set_title(f'{steps_4} steps with kT {kt4}')
+
 plt.show()

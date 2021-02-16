@@ -33,7 +33,7 @@ class IsingMCMC:
         self.w = dict()
 
     def initialize_system(self):
-        """ Initializes a lattice of size N x N to all ones (aka spin up) """
+        """ Initializes a lattice of size N x_points N to all ones (aka spin up) """
         self.lattice = np.ones([self.N, self.N])  # all spins up
         self.mag = self.N * self.N  # sum of spins
         self.energy = -2 * self.N * self.N  # minimum energy
@@ -44,7 +44,7 @@ class IsingMCMC:
         self.w[4] = np.exp(-4.0 / self.temp)
 
     def initialize_random_system(self):
-        """ Initializes a lattice of size N x N to all ones (aka spin up) """
+        """ Initializes a lattice of size N x_points N to all ones (aka spin up) """
         random_matrix = np.random.random([self.N, self.N])
         self.lattice = np.where(random_matrix > 0.5, -1, 1)
         self.mag = np.sum(self.lattice)
