@@ -112,17 +112,18 @@ g7_ballistics = BallisticCoefficient('6.5 Creedmoor', bc=48.38, rho=air_density,
                                  drag_ref_data=g7_drag_data, units='imperial')
 
 
-t_range = np.array([0, 1.4])                 # x range in feet
+t_range = np.array([0, 1.4])                # x range in feet
 v_muzzle = 2830                             # ft/s
-dist_between_barrel_and_scope = 0.164      # in feet
-zero_range = 600                            # in feet
-theta = np.arctan(dist_between_barrel_and_scope / zero_range)   # angle above horizontal to hit the zero range
-vx_0 = v_muzzle * np.cos(theta)     # Initial x velocity
-vy_0 = v_muzzle * np.sin(theta)     # Initial y velocity
+dist_between_barrel_and_scope = 0.164       # in feet
+zero_range = 800                            # in feet
+theta_one = np.arctan(dist_between_barrel_and_scope / zero_range)   # angle above horizontal to hit the zero range
+theta = np.pi / 180 / 12
+vx_0 = v_muzzle * np.cos(theta)             # Initial x velocity
+vy_0 = v_muzzle * np.sin(theta)             # Initial y velocity
 initial_state = np.array([0.0, -dist_between_barrel_and_scope, vx_0, vy_0])   # position in inches, velocity in ft/s
 
 ode_solver = ODESolver()
-t, y = ode_solver.solve_ode(projectile, t_range, initial_state, ode_solver.EulerRichardson, g7_ballistics, first_step=1e-6)
+t, y = ode_solver.solve_ode(projectile, t_range, initial_state, ode_solver.EulerRichardson, g7_ballistics, first_step=1e-4)
 
 velocities = np.sqrt(y[:, 2] ** 2 + y[:, 3] ** 2)
 
