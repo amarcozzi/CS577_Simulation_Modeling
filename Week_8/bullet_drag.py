@@ -44,12 +44,17 @@ def projectile(t, y, b):
 
     # Drag force
     Fd = b.get_drag(v_mag)
+    Fdx = b.get_drag(vx)
+    Fdy = b.get_drag(vy)
 
     # x and y acceleration
     ax = -Fd * (vx / v_mag)  # The vx/v_mag is the Fdx component of Fd
     ay = -b.g - Fd * (vy / v_mag)  # The vy/v_mag is the Fdy component of Fd
 
-    return np.array([vx, vy, ax, ay])
+    ax_test = -Fdx
+    ay_test = -b.g - Fdy
+
+    return np.array([vx, vy, ax_test, ay_test])
 
 
 class BallisticCoefficient:
@@ -112,11 +117,11 @@ lapua_6_5_creedmoor_144gr[:, 2] /= 12   # Convert drop from inches to feet
 # Assume temp celsius = 20
 air_density = 0.07517           # lb/ft^3
 speed_of_sound = 1126           # ft/s
-ballistics = BallisticCoefficient('6.5 Creedmoor', bc=0.655, rho=air_density, vs=speed_of_sound,
-                                 drag_ref_data=g1_drag_data, units='imperial')
+ballistics = BallisticCoefficient('6.5 Creedmoor', bc=0.336, rho=air_density, vs=speed_of_sound,
+                                 drag_ref_data=g7_drag_data, units='imperial')
 
 
-t_range = np.array([0, 1])                 # x range in feet
+t_range = np.array([0, 1.5])                 # x range in feet
 v_muzzle = 2830                             # ft/s
 dist_between_barrel_and_scope = 0.164      # in feet
 zero_range = 600                            # in feet

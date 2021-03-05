@@ -77,8 +77,10 @@ class ODESolver:
         y = [y0]
         t = [t0]
         while t[-1] < tf:
+            current_t = t[-1]
             # Compute change in t and change in position y at each time step
-            y.append(method(y[-1], dt, f, t[-1], *args))
+            new_y = method(y[-1], dt, f, t[-1], *args)
+            y.append(new_y)
             t.append(t[-1] + dt)
 
         # Convert t, y to np arrays and return them
