@@ -44,17 +44,12 @@ def projectile(t, y, b):
 
     # Drag force
     Fd = b.get_drag(v_mag)
-    Fdx = b.get_drag(vx)
-    Fdy = b.get_drag(vy)
 
     # x and y acceleration
     ax = -Fd * (vx / v_mag)  # The vx/v_mag is the Fdx component of Fd
     ay = -b.g - Fd * (vy / v_mag)  # The vy/v_mag is the Fdy component of Fd
 
-    ax_test = -Fdx
-    ay_test = -b.g - Fdy
-
-    return np.array([vx, vy, ax_test, ay_test])
+    return np.array([vx, vy, ax, ay])
 
 
 class BallisticCoefficient:
@@ -96,16 +91,10 @@ class BallisticCoefficient:
         force_of_drag = (1 / 2) * (1 / self.bc) * self.rho * Cdg * v**2
         return force_of_drag
 
-        # if self.units == 'imperial':
-        #     pass
-        #
-        # if self.units == 'metric':
-        #     pass
-
 
 # Do a sample simulation with the 6.5mm Creedmoor 144gr Long Range Hybrid Target
-# Has G1 BC: 0.655
-# And G7 BC: 0.336
+# Has G1 BC: 0.655 lb/in^2
+# And G7 BC: 0.336 lb/in^2
 # with muzzle velocity 2830 ft/s
 # https://bergerbullets.com/information/lines-and-designs/long-range-hybrid-target-bullets/
 
@@ -117,11 +106,13 @@ lapua_6_5_creedmoor_144gr[:, 2] /= 12   # Convert drop from inches to feet
 # Assume temp celsius = 20
 air_density = 0.07517           # lb/ft^3
 speed_of_sound = 1126           # ft/s
-ballistics = BallisticCoefficient('6.5 Creedmoor', bc=0.336, rho=air_density, vs=speed_of_sound,
+g1_ballistics = BallisticCoefficient('6.5 Creedmoor', bc=94.32, rho=air_density, vs=speed_of_sound,
+                                 drag_ref_data=g1_drag_data, units='imperial')
+g7_ballistics = BallisticCoefficient('6.5 Creedmoor', bc=48.38, rho=air_density, vs=speed_of_sound,
                                  drag_ref_data=g7_drag_data, units='imperial')
 
 
-t_range = np.array([0, 1.5])                 # x range in feet
+t_range = np.array([0, 1.4])                 # x range in feet
 v_muzzle = 2830                             # ft/s
 dist_between_barrel_and_scope = 0.164      # in feet
 zero_range = 600                            # in feet
@@ -131,10 +122,7 @@ vy_0 = v_muzzle * np.sin(theta)     # Initial y velocity
 initial_state = np.array([0.0, -dist_between_barrel_and_scope, vx_0, vy_0])   # position in inches, velocity in ft/s
 
 ode_solver = ODESolver()
-t, y = ode_solver.solve_ode(projectile, t_range, initial_state, ode_solver.EulerRichardson, ballistics, first_step=1e-4)
-
-# find index where y[0] >= 3000
-far_range = np.argwhere(y[:, 0] >= 3000)
+t, y = ode_solver.solve_ode(projectile, t_range, initial_state, ode_solver.EulerRichardson, g7_ballistics, first_step=1e-6)
 
 velocities = np.sqrt(y[:, 2] ** 2 + y[:, 3] ** 2)
 
@@ -146,9 +134,48 @@ plt.grid()
 plt.show()
 
 plt.subplots(figsize=(10, 4.5))
-plt.plot(y[:, 0], velocities, 'k-')
+plt.plot(y[:, 0], y[:, 2], 'k-')
 plt.plot(lapua_6_5_creedmoor_144gr[:, 0], lapua_6_5_creedmoor_144gr[:, 1], 'ro')
 plt.legend(['Simulation', 'Data'])
 plt.grid()
 plt.show()
 print('nada')
+
+"""
+# Data for 6.5 Creedmoor
+# G1 BC: 0.553
+# G7 BC: 0.278
+
+# Ballistics data for 6.5 Creedmoor
+velocity_6_5_creedmoor = np.array([[0, 800], [100, 746], [200, 695], [300, 645], [400, 598]])
+poi_6_5_creedmoor = np.array([[50, -0.4], [100, 0], [200, -12.6], [300, -45.7], [400, -102.3],
+                              [500, -186.4], [600, -303], [700, -457], [800, -657], [900, -911], [1000, -1231]])
+poi_6_5_creedmoor[:, 1] *= 0.01     # convert point of impact data to meters
+
+# Assume air temp of 20 degrees celcius
+air_density = 1.2041
+speed_of_sound = 343.21
+
+ballistics = BallisticCoefficient('6.5 Creedmoor', 388800, air_density, speed_of_sound, g1_drag_data, units='metric')
+
+time_range = np.array([0, 1])
+initial_state = np.array([0, 0, 800, 0])
+
+ode_solver = ODESolver()
+t, y = ode_solver.solve_ode(projectile, time_range, initial_state, ode_solver.EulerRichardson, ballistics,
+                             first_step=0.01)
+
+
+plt.subplots()
+plt.plot(y[:, 0], y[:, 1], 'k-')
+plt.plot(poi_6_5_creedmoor[:, 0], poi_6_5_creedmoor[:, 1], 'ro')
+plt.grid()
+plt.show()
+
+model_velocities = np.sqrt(np.square(y[:, 2]) + np.square(y[:, 3]))
+plt.subplots()
+plt.plot(y[:, 0], y[:, 2], 'k-')
+plt.plot(velocity_6_5_creedmoor[:, 0], velocity_6_5_creedmoor[:, 1], 'ro')
+plt.grid()
+plt.show()
+"""
