@@ -88,7 +88,7 @@ class BallisticCoefficient:
         vm = v / self.vs
         Cdg = np.interp(vm, self.drag_ref_data[:, 0], self.drag_ref_data[:, 1])
 
-        force_of_drag = (1 / 2) * (1 / self.bc) * self.rho * Cdg * np.square(v)
+        force_of_drag = (1 / 2) * (1 / self.bc) * self.rho * Cdg * v**2
         return force_of_drag
 
         # if self.units == 'imperial':
@@ -107,7 +107,7 @@ class BallisticCoefficient:
 # Load in observed data for the above round
 lapua_6_5_creedmoor_144gr = np.genfromtxt('./lapua_6_5_creedmoor_144gr_data.txt')
 lapua_6_5_creedmoor_144gr[:, 0] *= 3    # convert range from yards to feet
-lapua_6_5_creedmoor_144gr[:, 2] *= 12   # Convert drop from inches to feet
+lapua_6_5_creedmoor_144gr[:, 2] /= 12   # Convert drop from inches to feet
 
 # Assume temp celsius = 20
 air_density = 0.07517           # lb/ft^3
@@ -116,24 +116,34 @@ ballistics = BallisticCoefficient('6.5 Creedmoor', bc=0.655, rho=air_density, vs
                                  drag_ref_data=g1_drag_data, units='imperial')
 
 
-range = np.array([0, 1000])                 # x range in feet
+t_range = np.array([0, 1])                 # x range in feet
 v_muzzle = 2830                             # ft/s
-dist_between_barrel_and_scope = -0.164      # in feet
+dist_between_barrel_and_scope = 0.164      # in feet
 zero_range = 600                            # in feet
 theta = np.arctan(dist_between_barrel_and_scope / zero_range)   # angle above horizontal to hit the zero range
 vx_0 = v_muzzle * np.cos(theta)     # Initial x velocity
 vy_0 = v_muzzle * np.sin(theta)     # Initial y velocity
-initial_state = np.array([0.0, dist_between_barrel_and_scope, vx_0, vy_0])   # position in inches, velocity in ft/s
+initial_state = np.array([0.0, -dist_between_barrel_and_scope, vx_0, vy_0])   # position in inches, velocity in ft/s
 
 ode_solver = ODESolver()
-t, y = ode_solver.solve_ode(projectile, range, initial_state, ode_solver.EulerRichardson, ballistics, first_step=0.01)
+t, y = ode_solver.solve_ode(projectile, t_range, initial_state, ode_solver.EulerRichardson, ballistics, first_step=1e-4)
 
 # find index where y[0] >= 3000
 far_range = np.argwhere(y[:, 0] >= 3000)
 
+velocities = np.sqrt(y[:, 2] ** 2 + y[:, 3] ** 2)
+
 plt.subplots(figsize=(10, 4.5))
-plt.plot(y[:, far_range], y[:, 1])
-plt.plot(lapua_6_5_creedmoor_144gr[:, 0], lapua_6_5_creedmoor_144gr[:, 2])
+plt.plot(y[:, 0], y[:, 1], 'k-')
+plt.plot(lapua_6_5_creedmoor_144gr[:, 0], lapua_6_5_creedmoor_144gr[:, 2], 'ro')
+plt.legend(['Simulation', 'Data'])
+plt.grid()
+plt.show()
+
+plt.subplots(figsize=(10, 4.5))
+plt.plot(y[:, 0], velocities, 'k-')
+plt.plot(lapua_6_5_creedmoor_144gr[:, 0], lapua_6_5_creedmoor_144gr[:, 1], 'ro')
+plt.legend(['Simulation', 'Data'])
 plt.grid()
 plt.show()
 print('nada')
