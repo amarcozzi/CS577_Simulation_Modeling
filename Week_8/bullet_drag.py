@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from ode_solver import ODESolver
+from prettytable import PrettyTable
 from scipy import interpolate
 
 # Load in the data for the reference coefficients of drag for G1 and G7 bullets
@@ -141,6 +142,25 @@ plt.legend(['Simulation', 'Data'])
 plt.grid()
 plt.show()
 print('nada')
+
+# Interpolate the simulated data to find the drop and velocity at the observed data distances
+y_interpolated = np.interp(lapua_6_5_creedmoor_144gr[:, 0], y[:, 0], y[:, 1])
+v_interpolated = np.interp(lapua_6_5_creedmoor_144gr[:, 0], y[:, 0], np.sqrt(np.square(y[:, 2]) + np.square(y[:, 3])))
+
+# Compute Errors for position and velocity between observed and simulated data
+y_error = lapua_6_5_creedmoor_144gr[:, 2] - y_interpolated
+v_error = lapua_6_5_creedmoor_144gr[:, 1] - v_interpolated
+
+# Display the results
+table = PrettyTable()
+table.field_names = ['Distance (ft.)', *lapua_6_5_creedmoor_144gr[:, 0]]
+table.add_row(['Drop (ft)', *y_interpolated])
+table.add_row(['Drop Error (ft)', *y_error])
+table.add_row(['Velocity (ft/s)', *v_interpolated])
+table.add_row(['Velocity Error (ft/s)', *v_error])
+table.float_format = '0.3'
+print(table)
+
 
 """
 # Data for 6.5 Creedmoor
