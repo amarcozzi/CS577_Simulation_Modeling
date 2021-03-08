@@ -84,7 +84,7 @@ class ForestFireModel:
 
 
 # Create a landscape
-landscape = ForestFireModel(100, p=0.002, f=0.0001, t=.5)
+landscape = ForestFireModel(100, p=0.002, f=0.00001, t=.5)
 
 # Create custom colormaps for burning and for vegetation
 # burn_cmap = LinearSegmentedColormap.from_list('burn_cmap', ['firebrick'], N=1)
