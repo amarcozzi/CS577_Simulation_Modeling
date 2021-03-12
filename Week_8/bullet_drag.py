@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ode_solver import ODESolver
 from prettytable import PrettyTable
-from scipy import interpolate
 
 # Load in the data for the reference coefficients of drag for G1 and G7 bullets
 g1_drag_data = np.genfromtxt('./g1_drag_data.txt')
@@ -100,10 +99,11 @@ class BallisticCoefficient:
 # https://bergerbullets.com/information/lines-and-designs/long-range-hybrid-target-bullets/
 
 # Load in observed data for the above round
-lapua_6_5_creedmoor_144gr = np.genfromtxt('./lapua_6_5_creedmoor_144gr_data.txt')
-lapua_6_5_creedmoor_144gr[:, 0] *= 3    # convert range from yards to feet
-lapua_6_5_creedmoor_144gr[:, 2] /= 12   # Convert drop from inches to feet
+bullet_data = np.genfromtxt('./bullet_data_data.txt')
+bullet_data[:, 0] *= 3    # convert range from yards to feet
+bullet_data[:, 2] /= 12   # Convert drop from inches to feet
 
+# Ballistics Data for the round to the ballistics object
 # Assume temp celsius = 20
 air_density = 0.07517           # lb/ft^3
 speed_of_sound = 1126           # ft/s
@@ -112,17 +112,17 @@ g1_ballistics = BallisticCoefficient('6.5 Creedmoor', bc=94.32, rho=air_density,
 g7_ballistics = BallisticCoefficient('6.5 Creedmoor', bc=48.38, rho=air_density, vs=speed_of_sound,
                                  drag_ref_data=g7_drag_data, units='imperial')
 
-
+# Parameters for the ODE solver
 t_range = np.array([0, 1.4])                # x range in feet
 v_muzzle = 2830                             # ft/s
 dist_between_barrel_and_scope = 0.164       # in feet
 zero_range = 800                            # in feet
-theta_one = np.arctan(dist_between_barrel_and_scope / zero_range)   # angle above horizontal to hit the zero range
 theta = np.pi / 180 / 12
 vx_0 = v_muzzle * np.cos(theta)             # Initial x velocity
 vy_0 = v_muzzle * np.sin(theta)             # Initial y velocity
 initial_state = np.array([0.0, -dist_between_barrel_and_scope, vx_0, vy_0])   # position in inches, velocity in ft/s
 
+# Solve the ODE for G1 and G7 Ballistic Coefficients
 ode_solver = ODESolver()
 t, y = ode_solver.solve_ode(projectile, t_range, initial_state, ode_solver.EulerRichardson, g7_ballistics, first_step=1e-4)
 
@@ -130,36 +130,83 @@ velocities = np.sqrt(y[:, 2] ** 2 + y[:, 3] ** 2)
 
 plt.subplots(figsize=(10, 4.5))
 plt.plot(y[:, 0], y[:, 1], 'k-')
-plt.plot(lapua_6_5_creedmoor_144gr[:, 0], lapua_6_5_creedmoor_144gr[:, 2], 'ro')
+plt.plot(bullet_data[:, 0], bullet_data[:, 2], 'ro')
 plt.legend(['Simulation', 'Data'])
 plt.grid()
 plt.show()
 
 plt.subplots(figsize=(10, 4.5))
 plt.plot(y[:, 0], y[:, 2], 'k-')
-plt.plot(lapua_6_5_creedmoor_144gr[:, 0], lapua_6_5_creedmoor_144gr[:, 1], 'ro')
+plt.plot(bullet_data[:, 0], bullet_data[:, 1], 'ro')
 plt.legend(['Simulation', 'Data'])
 plt.grid()
 plt.show()
 print('nada')
 
 # Interpolate the simulated data to find the drop and velocity at the observed data distances
-y_interpolated = np.interp(lapua_6_5_creedmoor_144gr[:, 0], y[:, 0], y[:, 1])
-v_interpolated = np.interp(lapua_6_5_creedmoor_144gr[:, 0], y[:, 0], np.sqrt(np.square(y[:, 2]) + np.square(y[:, 3])))
+y_interpolated = np.interp(bullet_data[:, 0], y[:, 0], y[:, 1])
+v_interpolated = np.interp(bullet_data[:, 0], y[:, 0], np.sqrt(np.square(y[:, 2]) + np.square(y[:, 3])))
 
 # Compute Errors for position and velocity between observed and simulated data
-y_error = lapua_6_5_creedmoor_144gr[:, 2] - y_interpolated
-v_error = lapua_6_5_creedmoor_144gr[:, 1] - v_interpolated
+y_error = bullet_data[:, 2] - y_interpolated
+v_error = bullet_data[:, 1] - v_interpolated
 
 # Display the results
 table = PrettyTable()
-table.field_names = ['Distance (ft.)', *lapua_6_5_creedmoor_144gr[:, 0]]
+table.field_names = ['Distance (ft.)', *bullet_data[:, 0]]
 table.add_row(['Drop (ft)', *y_interpolated])
 table.add_row(['Drop Error (ft)', *y_error])
 table.add_row(['Velocity (ft/s)', *v_interpolated])
 table.add_row(['Velocity Error (ft/s)', *v_error])
 table.float_format = '0.3'
 print(table)
+
+
+"""
+Mechanism for finding the optimal theta
+"""
+print(f'old theta is {theta}')
+prev_error = 1000.
+for n in np.geomspace(1, 80, num=20):
+    theta = np.pi / 180 / n
+    vx_0 = v_muzzle * np.cos(theta)  # Initial x velocity
+    vy_0 = v_muzzle * np.sin(theta)  # Initial y velocity
+    initial_state = np.array([0.0, -dist_between_barrel_and_scope, vx_0, vy_0])  # position in inches, velocity in ft/s
+
+    # Solve the ODE with the proposed value of theta
+    t, y = ode_solver.solve_ode(projectile, t_range, initial_state, ode_solver.EulerRichardson, g7_ballistics,
+                                first_step=1e-4)
+
+    # Compute the error at distance = 600 ft. (zero-distance) to evaluate the best theta
+    zero_drop = np.interp(200, y[:, 0], y[:, 1])
+    if zero_drop < 0 and prev_error > 0:
+        low_theta = theta
+        break
+    prev_error = zero_drop
+    high_theta = theta
+
+print(f'Best theta is in the range {low_theta}, {high_theta}')
+
+# Now perform a fine search in the range [low_theta, high_theta]
+best_theta = 0
+best_error = 1000
+for theta in np.linspace(low_theta, high_theta, 500):
+    vx_0 = v_muzzle * np.cos(theta)  # Initial x velocity
+    vy_0 = v_muzzle * np.sin(theta)  # Initial y velocity
+    initial_state = np.array([0.0, -dist_between_barrel_and_scope, vx_0, vy_0])  # position in inches, velocity in ft/s
+
+    # Solve the ODE with the proposed value of theta
+    t, y = ode_solver.solve_ode(projectile, t_range, initial_state, ode_solver.EulerRichardson, g7_ballistics,
+                                first_step=1e-4)
+
+    # Compute the error at distance = 600 ft. (zero-distance) to evaluate the best theta
+    zero_drop = np.interp(200, y[:, 0], y[:, 1])
+    error = np.square(zero_drop)
+    if error < best_error:
+        best_error = error
+        best_theta = theta
+
+print(f'new best theta is {best_theta} with error {best_error}')
 
 
 """
