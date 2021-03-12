@@ -44,14 +44,14 @@ class GreekModel:
         theta_w = np.radians(180)  # Wind direction (Degrees from 0)
         ft = np.exp(V * c2 * (np.cos(theta_w) - 1))
         p_w = np.exp(c1 * V) * ft"""
-        p_w = self._compute_wind_probs(theta, V, c1, c2)
+        # p_w = self._compute_wind_probs(theta, V, c1, c2)
 
         # Slope constants
         theta_s = 0
         p_s = np.exp(a * theta_s)
 
         # Compute the probability of burning
-        self.p_burn = ph * (1 + p_veg) * (1 + p_den) * p_w * p_s
+        # self.p_burn = ph * (1 + p_veg) * (1 + p_den) * p_w * p_s
         print('debug')
 
     def initialize_state(self, p):
@@ -81,6 +81,7 @@ class GreekModel:
         k = [[1, 1, 1], [1, 0, 1], [1, 1, 1]]  # kernel for next-nearest neighbor sum
         potential_states = signal.convolve2d(prev_burning, k, mode='same', boundary='fill')
 
+        theta_vec = self._get_fire_propagation_vectors()
 
         chance_to_burn = np.random.rand(self.L, self.L)
 
@@ -133,6 +134,11 @@ class GreekModel:
                 angle = np.arccos(dot_product)
                 angle_matrix[i, j] = angle
         return angle_matrix
+
+    def _get_fire_propagation_vectors(self, m):
+        """
+        Computes the angle between the wind vector and the direction of fire propagation for every cell
+        """
 
 # Initialize the lattice
 lattice_size = 1000
