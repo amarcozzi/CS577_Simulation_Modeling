@@ -86,7 +86,7 @@ class GreekModel:
         chance_to_burn = np.random.rand(self.L, self.L)
 
         # Need to border a currently burning state, follow some probability, and have available fuel
-        condition_one = np.logical_and(potential_states == 1, chance_to_burn < self.p_burn)
+        condition_one = np.logical_and(potential_states >= 1, chance_to_burn < self.p_burn)
         condition_two = np.logical_and(condition_one, self.State == 2)
         newly_burning = np.where(condition_two, True, False)
 
