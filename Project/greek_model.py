@@ -39,12 +39,12 @@ class GreekModel:
         c1 = 0.045
         c2 = 0.131
 
-        """# Wind speed constants
+        # Wind speed constants
         V = 2  # wind speed m/s
         theta_w = np.radians(180)  # Wind direction (Degrees from 0)
         ft = np.exp(V * c2 * (np.cos(theta_w) - 1))
-        p_w = np.exp(c1 * V) * ft"""
-        p_w = self._compute_wind_probs(theta, V, c1, c2)
+        p_w = np.exp(c1 * V) * ft
+        # p_w = self._compute_wind_probs(theta, V, c1, c2)
 
         # Slope constants
         theta_s = 0
@@ -77,13 +77,26 @@ class GreekModel:
         # Break down the State matrix into its components
         prev_burning = np.where(self.State == 3, True, False)
 
-        # Compute the probability that a state neighboring a burning state will burn
+        x_force = [[-1, 0, 1],
+                   [-1, 0, 1],
+                   [-1, 0, 1]]
+        y_force = [[1, 0, 1],
+                   [0, 0, 0],
+                   [-1, 0, -1]]
+
+        x_candidate = signal.convolve2d(prev_burning, x_force, mode='same', boundary='fill')
+        y_candidate = signal.convolve2d(prev_burning, y_force, mode='same', boundary='fill')
+        print('debug')
+
+        """# Compute the probability that a state neighboring a burning state will burn
         k = [[1, 1, 1], [1, 0, 1], [1, 1, 1]]  # kernel for next-nearest neighbor sum
-        potential_states = signal.convolve2d(prev_burning, k, mode='same', boundary='fill')
+        potential_states = signal.convolve2d(prev_burning, k, mode='same', boundary='fill')"""
+
+
         chance_to_burn = np.random.rand(self.L, self.L)
 
         # Need to border a currently burning state, follow some probability, and have available fuel
-        condition_one = np.logical_and(potential_states == 1, chance_to_burn < self.p_burn)
+        condition_one = np.logical_and(x_candidate == 1, chance_to_burn < self.p_burn)
         condition_two = np.logical_and(condition_one, self.State == 2)
         newly_burning = np.where(condition_two, True, False)
 
@@ -133,7 +146,7 @@ class GreekModel:
         return angle_matrix
 
 # Initialize the lattice
-lattice_size = 1000
+lattice_size = 5
 model = GreekModel(lattice_size, 8, 45)
 
 # Initial fuel/no fuel in the lattice
