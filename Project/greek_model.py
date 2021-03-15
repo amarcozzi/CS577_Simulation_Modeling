@@ -14,14 +14,19 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import ListedColormap
 
 
-
 class GreekModel:
     """
     Object represents the Cellular Automata presented in the paper
     """
 
-    def __init__(self, L, V, theta):
+    def __init__(self, L, V, wind_dir):
         """
+
+        Parameters:
+            L - Size of the lattice
+            V - Wind speed
+            wind_dir - Wind direction. Measured in degrees from true north, clockwise
+
         Initializes the State of the system according to the CA definition:
         1) State = 1: Cell contains no fuel
         2) State = 2: Cell contains unburned fuel
@@ -45,6 +50,15 @@ class GreekModel:
         ft = np.exp(V * c2 * (np.cos(theta_w) - 1))
         p_w = np.exp(c1 * V) * ft"""
         # p_w = self._compute_wind_probs(theta, V, c1, c2)
+        self.V = V
+        self.wind_dir = np.radians(wind_dir)
+
+        # Compute wind as a vector
+        x_vel = V * np.sin(self.wind_dir)
+        y_vel = V * np.cos(self.wind_dir)
+        self.wind_vec = np.array([x_vel, y_vel])
+        self.unit_wind_vec = self.wind_vec / np.linalg.norm(self.wind_vec)
+        self.kx, self.ky = self._get_wind_kernels()
 
         # Slope constants
         theta_s = 0
@@ -77,11 +91,12 @@ class GreekModel:
         # Break down the State matrix into its components
         prev_burning = np.where(self.State == 3, True, False)
 
-        # Compute the probability that a state neighboring a burning state will burn
+        # Compute the number of neighbors of each cell
         k = [[1, 1, 1], [1, 0, 1], [1, 1, 1]]  # kernel for next-nearest neighbor sum
         potential_states = signal.convolve2d(prev_burning, k, mode='same', boundary='fill')
 
-        theta_vec = self._get_fire_propagation_vectors()
+        # Compute the angles of fire propagation relative to the wind vector
+        theta_vec = self._get_fire_propagation_vectors(prev_burning)
 
         chance_to_burn = np.random.rand(self.L, self.L)
 
@@ -99,7 +114,7 @@ class GreekModel:
 
         """
         # Compute wind as a vector
-        wind_dir_rads = np.radians(wind_dir)    # Convert from degrees to radians
+        wind_dir_rads = np.radians(wind_dir)  # Convert from degrees to radians
         x_vel = V * np.sin(wind_dir_rads)
         y_vel = V * np.cos(wind_dir_rads)
         wind_vec = np.array([x_vel, y_vel])
@@ -120,8 +135,8 @@ class GreekModel:
         unit_wind_dir_vec = wind_dir_vec / np.linalg.norm(wind_dir_vec)
         angle_matrix = np.zeros([self.L, self.L])
 
-        x = np.linspace(-self.L//2, self.L//2, self.L)
-        y = np.linspace(-self.L//2, self.L//2, self.L)
+        x = np.linspace(-self.L // 2, self.L // 2, self.L)
+        y = np.linspace(-self.L // 2, self.L // 2, self.L)
         xx, yy = np.meshgrid(x, y)
 
         for i in range(self.L):
@@ -135,14 +150,63 @@ class GreekModel:
                 angle_matrix[i, j] = angle
         return angle_matrix
 
+    def _get_wind_kernels(self):
+        """ Computes the x and y direction convolution kernels based on wind direction """
+        # Create 3x3 grid for the kernel
+        x = np.linspace(-1, 1, 3)
+        y = np.linspace(-1, 1, 3)
+        xx, yy = np.meshgrid(x, y)
+
+        # Compute projection of vector ij onto the wind vector
+        k = np.zeros([3, 3])
+        angles = np.zeros([3, 3])
+        for i in range(3):
+            for j in range(3):
+                x_coord = xx[i, j]
+                y_coord = yy[i, j]
+                rij = np.array([x_coord, y_coord])
+                dot_product = -np.dot(rij, self.unit_wind_vec)
+                if dot_product < 0:
+                    dot_product += 0.00001
+                k[j, i] = dot_product
+
+                angle = np.arccos(dot_product)
+                angles[j, i] = np.degrees(angle)
+
+        left_x = k[1, 0] + np.flip(k.T)[1, 0]
+        right_x = k[1, 2] + np.flip(k.T)[1, 2]
+        top_y = k[0, 1] + np.flip(k.T)[0, 1]
+        bottom_y = k[2, 1] + np.flip(k.T)[2, 1]
+
+        kx = np.array([[left_x, 0, right_x], [left_x, 0, right_x], [left_x, 0, right_x]])
+        ky = np.array([[top_y, top_y, top_y], [0, 0, 0], [bottom_y, bottom_y, bottom_y]])
+
+        return kx, ky
+
     def _get_fire_propagation_vectors(self, m):
         """
         Computes the angle between the wind vector and the direction of fire propagation for every cell
         """
+        x = signal.convolve2d(m, self.kx, mode='same', boundary='fill')
+        y = signal.convolve2d(m, self.ky, mode='same', boundary='fill')
+
+        # Compute unit vectors of x and y components
+        xy_vec = np.column_stack([x.flatten(), y.flatten()])
+        xy_unit_vec = np.divide(xy_vec, np.linalg.norm(xy_vec, axis=1)[:, None])
+        # np.nan_to_num(xy_unit_vec, copy=False, nan=0.0)
+
+        # Take the dot product between unit vectors and find the angle between them
+        dot_product = np.dot(xy_unit_vec, self.unit_wind_vec)
+        angle = np.arccos(dot_product)
+        theta_w_matrix = angle
+        view_theta = np.degrees(theta_w_matrix).reshape(self.L, self.L)
+
+        print('debug')
+
 
 # Initialize the lattice
-lattice_size = 1000
-model = GreekModel(lattice_size, 8, 45)
+lattice_size = 5
+model = GreekModel(lattice_size, 8, 0)
 
 # Initial fuel/no fuel in the lattice
 fuel_probability = 1.0
@@ -185,10 +249,12 @@ diff = norm_bins[1:] - norm_bins[:-1]
 tickz = norm_bins[:-1] + diff / 2
 cb = fig.colorbar(world, format=fmt, ticks=tickz)
 
+
 # Define a function for each step in the animation
 def animate(i):
     model.do_one_time_step()
     world.set_data(model.State)
+
 
 # Animate the fire model
 anim = FuncAnimation(fig, animate, interval=50, frames=frames, repeat=False)
