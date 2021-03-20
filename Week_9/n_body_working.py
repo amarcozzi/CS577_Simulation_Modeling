@@ -1,6 +1,6 @@
 import numpy as np
 from prettytable import PrettyTable
-from ode_solver import ODESolver
+from Utilities.ode_solver import ODESolver
 
 def n_body(t, y, p):
     """
@@ -75,6 +75,11 @@ class Bodies:
             raise ValueError('Number of masses must equal the number of bodies')
         else:
             self.masses = m
+
+    def force_function(self, vec, m1, m2, G):
+        """ Computes the force from the n-body problem """
+        f = -G * m1 * m2 / np.power(np.linalg.norm(vec), 3)
+        return f
 
 
 ################################
