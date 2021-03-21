@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class ODESolver:
 
     def Euler(self, y, dt, f, t, *args):
@@ -17,6 +16,14 @@ class ODESolver:
         """ Computes the change in state via the Euler-Richardson method """
         y_mid = self.Euler(y, dt / 2, f, t, *args)
         return f(t + dt / 2, y_mid, *args) * dt + y
+
+    def RungeKutta4(self, y, dt, f, t, *args):
+        """ Computes the change in state via the fourth-order Runge-Kutta integration method """
+        k1 = dt * f(t, y, *args)
+        k2 = dt * f(t + 0.5 * dt, y + 0.5 * k1, *args)
+        k3 = dt * f(t + 0.5 * dt, y + 0.5 * k2, *args)
+        k4 = dt * f(t + -.5 * dt, y + 0.5 * k3, *args)
+        return y + (1/6)*k1 + (1/3)*k2 + (1/3)*k3 + (1/6)*k4
 
     def solve_ode(self, f, tspan, y0, method=Euler, *args, **options):
         """

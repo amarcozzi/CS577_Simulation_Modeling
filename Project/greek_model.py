@@ -37,12 +37,12 @@ class GreekModel:
         self.State = np.zeros([self.L, self.L])
 
         # Add some of the paper constants. To be fixed up later
-        p_den = 0
-        p_veg = 0.4
-        ph = 0.58
-        a = 0.078
-        c1 = 0.045
-        c2 = 0.131
+        self.p_den = 0
+        self.p_veg = 0.4
+        self.ph = 0.58
+        self.a = 0.078
+        self.c1 = 0.045
+        self.c2 = 0.131
 
         """ # Wind speed constants
         V = 2  # wind speed m/s
@@ -61,8 +61,8 @@ class GreekModel:
         self.kx, self.ky = self._get_wind_kernels()
 
         # Slope constants
-        theta_s = 0
-        p_s = np.exp(a * theta_s)
+        # theta_s = 0
+        # p_s = np.exp(a * theta_s)
 
         # Compute the probability of burning
         # self.p_burn = ph * (1 + p_veg) * (1 + p_den) * p_w * p_s
@@ -96,12 +96,15 @@ class GreekModel:
         potential_states = signal.convolve2d(prev_burning, k, mode='same', boundary='fill')
 
         # Compute the angles of fire propagation relative to the wind vector
-        theta_vec = self._get_fire_propagation_vectors(prev_burning)
+        theta_w = self._get_fire_propagation_vectors(prev_burning)
 
-        chance_to_burn = np.random.rand(self.L, self.L)
+        # Compute the probability of burning for each cell
+        p_burn = self._get_fire_probability(theta_w)
+
+        random_matrix = np.random.rand(self.L, self.L)
 
         # Need to border a currently burning state, follow some probability, and have available fuel
-        condition_one = np.logical_and(potential_states >= 1, chance_to_burn < self.p_burn)
+        condition_one = np.logical_and(potential_states >= 1, random_matrix < p_burn)
         condition_two = np.logical_and(condition_one, self.State == 2)
         newly_burning = np.where(condition_two, True, False)
 
@@ -109,46 +112,6 @@ class GreekModel:
         self.State[prev_burning] = 4  # Set previously burning cells to extinguished
         self.State[newly_burning] = 3  # Set new cells on fire
 
-    def _compute_wind_probs(self, wind_dir, V, c1, c2):
-        """
-
-        """
-        # Compute wind as a vector
-        wind_dir_rads = np.radians(wind_dir)  # Convert from degrees to radians
-        x_vel = V * np.sin(wind_dir_rads)
-        y_vel = V * np.cos(wind_dir_rads)
-        wind_vec = np.array([x_vel, y_vel])
-
-        # Compute theta for all cells
-        theta = self._compute_wind_thetas(wind_vec)
-
-        ft = np.exp(V * c2 * (np.cos(theta) - 1))
-        p_w = np.exp(c1 * V) * ft
-
-        return p_w
-
-    def _compute_wind_thetas(self, wind_dir_vec):
-        """
-        Computes the angle between all vectors on the discretized plane and the vector representing the wind direction
-        """
-
-        unit_wind_dir_vec = wind_dir_vec / np.linalg.norm(wind_dir_vec)
-        angle_matrix = np.zeros([self.L, self.L])
-
-        x = np.linspace(-self.L // 2, self.L // 2, self.L)
-        y = np.linspace(-self.L // 2, self.L // 2, self.L)
-        xx, yy = np.meshgrid(x, y)
-
-        for i in range(self.L):
-            for j in range(self.L):
-                x_coord = xx[i, j]
-                y_coord = yy[i, j]
-                rij = np.array([x_coord, y_coord])
-                unit_rij = rij / np.linalg.norm(rij)
-                dot_product = np.dot(unit_rij, unit_wind_dir_vec)
-                angle = np.arccos(dot_product)
-                angle_matrix[i, j] = angle
-        return angle_matrix
 
     def _get_wind_kernels(self):
         """ Computes the x and y direction convolution kernels based on wind direction """
@@ -165,13 +128,10 @@ class GreekModel:
                 x_coord = xx[i, j]
                 y_coord = yy[i, j]
                 rij = np.array([x_coord, y_coord])
-                dot_product = -np.dot(rij, self.unit_wind_vec)
+                dot_product = np.dot(rij, self.unit_wind_vec)
                 if dot_product < 0:
-                    dot_product += 0.00001
+                    dot_product += 1e-8
                 k[j, i] = dot_product
-
-                angle = np.arccos(dot_product)
-                angles[j, i] = np.degrees(angle)
 
         left_x = k[1, 0] + np.flip(k.T)[1, 0]
         right_x = k[1, 2] + np.flip(k.T)[1, 2]
@@ -191,7 +151,7 @@ class GreekModel:
         y = signal.convolve2d(m, self.ky, mode='same', boundary='fill')
 
         # Compute unit vectors of x and y components
-        xy_vec = np.column_stack([x.flatten(), y.flatten()])
+        xy_vec = np.column_stack([y.flatten(), x.flatten()])
         xy_unit_vec = np.divide(xy_vec, np.linalg.norm(xy_vec, axis=1)[:, None])
         # np.nan_to_num(xy_unit_vec, copy=False, nan=0.0)
 
@@ -201,11 +161,26 @@ class GreekModel:
         theta_w_matrix = angle
         view_theta = np.degrees(theta_w_matrix).reshape(self.L, self.L)
 
-        print('debug')
+        return theta_w_matrix.reshape(self.L, self.L)
 
+    def _get_fire_probability(self, t_w):
+        """ Computes the probability of burning for each cell """
+        # Compute probability of wind carried fire propagation
+        ft = np.exp(self.V * self.c2 * (np.cos(t_w) - 1))
+        p_w = np.exp(self.c1 * self.V) * ft
+
+        # Compute probability of slope carried fire propagation
+        theta_s = 0
+        p_s = np.exp(self.a * theta_s)
+
+        # Compute the probability of burning
+        # p_b = self.ph * (1 + self.p_veg) * (1 + self.p_den) * p_w * p_s
+        p_b = self.ph * (0.5 + self.p_veg) * (1 + self.p_den) * p_w * p_s
+
+        return p_b
 
 # Initialize the lattice
-lattice_size = 5
+lattice_size = 1000
 model = GreekModel(lattice_size, 8, 0)
 
 # Initial fuel/no fuel in the lattice
@@ -213,8 +188,8 @@ fuel_probability = 1.0
 model.initialize_state(fuel_probability)
 
 # Set an ignition point
-ignition_point_r = [lattice_size // 2]
-ignition_point_c = [lattice_size // 2]
+ignition_point_r = [50]
+ignition_point_c = [30]
 model.ignite_fire(ignition_point_r, ignition_point_c)
 
 """for i in range(50):
