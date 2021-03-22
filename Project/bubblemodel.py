@@ -1,3 +1,10 @@
+"""
+Based on the paper: A hybrid cellular automata/semi-physical model of fire growth
+BY: A.L. Sullivan and I.K. Knight
+
+https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.89.6604&rep=rep1&type=pdf
+"""
+
 import numpy as np
 
 class Bubble:
