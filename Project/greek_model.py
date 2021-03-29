@@ -54,8 +54,8 @@ class GreekModel:
         self.wind_dir = np.radians(wind_dir)
 
         # Compute wind as a vector
-        x_vel = V * np.sin(self.wind_dir)
-        y_vel = V * np.cos(self.wind_dir)
+        x_vel = V * np.cos(self.wind_dir)
+        y_vel = V * np.sin(self.wind_dir)
         self.wind_vec = np.array([x_vel, y_vel])
         self.unit_wind_vec = self.wind_vec / np.linalg.norm(self.wind_vec)
         self.kx, self.ky = self._get_wind_kernels()
@@ -151,7 +151,7 @@ class GreekModel:
         y = signal.convolve2d(m, self.ky, mode='same', boundary='fill')
 
         # Compute unit vectors of x and y components
-        xy_vec = np.column_stack([y.flatten(), x.flatten()])
+        xy_vec = np.column_stack([x.flatten(), y.flatten()])
         xy_unit_vec = np.divide(xy_vec, np.linalg.norm(xy_vec, axis=1)[:, None])
         # np.nan_to_num(xy_unit_vec, copy=False, nan=0.0)
 
@@ -180,16 +180,16 @@ class GreekModel:
         return p_b
 
 # Initialize the lattice
-lattice_size = 1000
-model = GreekModel(lattice_size, 8, 0)
+lattice_size = 100
+model = GreekModel(lattice_size, 8, 180)
 
 # Initial fuel/no fuel in the lattice
 fuel_probability = 1.0
 model.initialize_state(fuel_probability)
 
 # Set an ignition point
-ignition_point_r = [50]
-ignition_point_c = [30]
+ignition_point_r = [lattice_size//2]
+ignition_point_c = [lattice_size//4]
 model.ignite_fire(ignition_point_r, ignition_point_c)
 
 """for i in range(50):
@@ -232,5 +232,5 @@ def animate(i):
 
 
 # Animate the fire model
-anim = FuncAnimation(fig, animate, interval=50, frames=frames, repeat=False)
+anim = FuncAnimation(fig, animate, interval=200, frames=frames, repeat=False)
 plt.show()
