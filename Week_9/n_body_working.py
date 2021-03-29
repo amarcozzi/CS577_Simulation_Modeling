@@ -1,4 +1,5 @@
 import numpy as np
+
 from prettytable import PrettyTable
 from ode_solver import ODESolver
 
@@ -17,8 +18,7 @@ def n_body(t, y, p):
 
     returns dxdt
     """
-    # TODO: multiply m1 and m2
-    # TODO: fix_first
+
 
     # Get some constants and initialize
     N = len(p['m'])
@@ -38,7 +38,6 @@ def n_body(t, y, p):
             rij = pos_matrix[i, :] - pos_matrix[j, :]
 
             # Compute the force from body j onto body i
-            # Fij = p['force'](rij, p['mass'][i], p['mass'][j], p['G']) * rij # old calculation
             Fij = (-p['G'] * p['m'][i] * p['m'][j] / np.power(np.linalg.norm(rij), 3)) * rij
 
             # Fill in the symmetric pieces of the force matrix
@@ -49,6 +48,7 @@ def n_body(t, y, p):
     forces = np.sum(Fmatrix, axis=1)
 
     # flatten the forces matrix and combine it with the vector list
+    # TODO: Rework how you build these
     acc_vec = forces.flatten().tolist()
     dxdt = np.array([vel_vec, acc_vec]).flatten()
 
@@ -118,3 +118,16 @@ p3 = {'m': [1, 1, 1], 'G': 1, 'dimension': 2, 'fix_first': False}
 ode_solver = ODESolver()
 tspan = [0, 100]
 t, y = ode_solver.solve_ode(n_body, tspan, euler, ode_solver.EulerRichardson, p3, first_step=1)"""
+
+euler      = np.array([0,0,1,0,-1,0,0,0,0,.8,0,-.8])
+# p3 = {'m':[1,1,1],'G':1,'dimension':2,'force':gravitational,'fix_first':False}
+p3 = {'m':[1,1,1],'G':1,'dimension':2,'fix_first':False}
+
+y0 = euler
+p  = p3
+d = p['dimension']
+dt = 0.0025  # This is wrong - figure it out!
+t_span = [0,100]
+
+solver = ODESolver()
+t_s,y = solver.solve_ode(n_body,t_span, y0, solver.RK45, p,first_step=dt, atol=1e-6, rtol=1e-6, S=0.98)
