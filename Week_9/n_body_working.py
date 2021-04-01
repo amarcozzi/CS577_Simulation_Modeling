@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 from prettytable import PrettyTable
 from ode_solver import ODESolver
@@ -74,4 +75,7 @@ dt = 0.0025  # This is wrong - figure it out!
 t_span = [0,100]
 
 solver = ODESolver()
-t_s,y = solver.solve_ode(n_body,t_span, y0, solver.RK45, p,first_step=dt, atol=1e-6, rtol=1e-6, S=0.9)
+t_s,y = solver.solve_ode(n_body,t_span, y0, solver.RK45, p,first_step=dt, atol=1e-10, rtol=1e-14, S=0.98)
+
+plt.plot(solver.step_size_cache)
+plt.show()
