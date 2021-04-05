@@ -81,22 +81,44 @@ def total_energy(y, p):
         pos_matrix = pos_vec.reshape(N, d)
         vel_matrix = vel_vec.reshape(N, d)
 
-        for i in range(0, N - 1):
-            # This loop determines kinetic energy for each body
-            ke = p['m'][i] * np.square(np.linalg.norm(vel_matrix[i, :]))
+        # This loop determines kinetic energy for each body
+        for i in range(0, N):
+            ke = (1 / 2) * p['m'][i] * np.square(np.linalg.norm(vel_matrix[i, :]))
             KE[k] += ke
 
-            # This loop determines total potential energy
+        # This loop determines total potential energy
+        for i in range(0, N - 1):
             for j in range(i + 1, N):
                 rij = pos_matrix[i, :] - pos_matrix[j, :]
                 pe = -(p['G'] * p['m'][i] * p['m'][j]) / np.linalg.norm(rij)
                 V[k] += pe
 
-
     return KE, V, KE + V
 
 
-euler = np.array([0, 0, 1, 0, -1, 0, 0, 0, 0, .8, 0, -.8])
+"""def plot_trajectory(y, y0, d):
+    fig = plt.figure(figsize=(5, 5))
+    ax = fig.add_subplot(111)
+
+    x_min, x_max, y_min, y_max = 1e9, -1e9, 1e9, -1e9
+    for i in range(0, y0.size // d, d):
+        x_t = y[:, i]
+        y_t = y[:, i + 1]
+        if x_min > x_t.min(): x_min = x_t.min()
+        if x_max < x_t.max(): x_max = x_t.max()
+        if y_min > y_t.min(): y_min = y_t.min()
+        if y_max < y_t.max(): y_max = y_t.max()
+
+    ph, = ax.plot(x_t, y_t, '-', color=[.7, .7, .7], linewidth=.5)
+
+    plt.xlim([1.2 * x_min, 1.2 * x_max])
+    plt.ylim([1.2 * y_min, 1.2 * y_max])
+
+    ax.axis('off')
+    plt.show()"""
+
+
+"""euler = np.array([0, 0, 1, 0, -1, 0, 0, 0, 0, .8, 0, -.8])
 lagrange = np.array([1., 0., -0.5, 0.866025403784439, -0.5, -0.866025403784439,
                      0., 0.8, -0.692820323027551, -0.4, 0.692820323027551, -0.4])
 montgomery = np.array([0.97000436, -0.24308753, -0.97000436, 0.24308753, 0., 0.,
@@ -104,19 +126,19 @@ montgomery = np.array([0.97000436, -0.24308753, -0.97000436, 0.24308753, 0., 0.,
                        -0.93240737, -0.86473146])
 p3 = {'m': [1, 1, 1], 'G': 1, 'dimension': 2, 'force': gravitational, 'fix_first': False}
 
-y0 = montgomery
+y0 = lagrange
 p_init = p3
 dt = 0.01  # This is wrong - figure it out!
 t_span = [0, 100]
 
 solver = ODESolver()
 t_s, y_s = solver.solve_ode(n_body, t_span, y0, solver.RK45, p_init, first_step=dt, atol=1e-10, rtol=1e-14,
-                            S=0.98)
+                            S=0.98)"""
 
-kinetic, potential, total = total_energy(y_s, p_init)
+# kinetic, potential, total = total_energy(y_s, p_init)
 
-plt.plot(kinetic)
-plt.plot(potential)
-plt.plot(total)
-plt.legend(['KE', 'V', 'Total'])
-plt.show()
+# plt.plot(kinetic)
+# plt.plot(potential)
+# plt.plot(total)
+# plt.legend(['KE', 'V', 'Total'])
+# plt.show()
