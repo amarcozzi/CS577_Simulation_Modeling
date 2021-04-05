@@ -13,7 +13,7 @@ class ForestFireModel:
         1) A burning cell turns into an empty cell
         2) A tree will burn if at least one neighbor is burning
         3) A tree ignites with probability f, even if no neighbor is burning (lightning strike)
-        4) An empty space fills with a tree with probability p
+        4) An empty space fills with a tree with probability p_init
     """
 
     def __init__(self, L, p, f, t=.75):
@@ -45,7 +45,7 @@ class ForestFireModel:
         self.throw_lightning()
 
     def grow_trees(self):
-        """ This function grows new trees in empty cells with probability p """
+        """ This function grows new trees in empty cells with probability p_init """
         new_trees = np.random.random((self.L, self.L))
         condition = np.logical_and(self.trees == 0, new_trees < self.p)
         self.trees[condition] = 1

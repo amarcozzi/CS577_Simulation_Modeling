@@ -1,5 +1,5 @@
 import numpy as np
-
+from scipy.interpolate import interp1d
 
 class ODESolver:
 
@@ -17,14 +17,14 @@ class ODESolver:
 
     def EulerCromer(self, y, dt, f, t, *args, **options):
         """ Computes the change in state via the Euler-Cromer method """
-        y_end = self.Euler(y, dt, f, t, *args)
+        y_end, nada = self.Euler(y, dt, f, t, *args)
         y_return = f(t + dt, y_end, *args) * dt + y
         self.num_f_calls += 1  # Increment the number of function calls
         return y_return, dt
 
     def EulerRichardson(self, y, dt, f, t, *args, **options):
         """ Computes the change in state via the Euler-Richardson method """
-        y_mid = self.Euler(y, dt / 2, f, t, *args)
+        y_mid, nada = self.Euler(y, dt / 2, f, t, *args)
         y_computed = f(t + dt / 2, y_mid, *args) * dt + y
         self.num_f_calls += 1  # Increment the number of function calls
         return y_computed, dt
@@ -147,14 +147,14 @@ class ODESolver:
         would plot positions.
 
         """
-        # Reset the number of function calls
+        # Reset object attributes
         self.num_f_calls = 0
         self.FSAL = False
         self.step_size_cache = []
 
         # pull in solver parameters from passed arguments
         dt = options['first_step']
-        self.step_size_cache.append(dt)
+        first_dt = options['first_step']
         t0 = tspan[0]
         tf = tspan[1]
         y = [y0]
@@ -184,6 +184,12 @@ class ODESolver:
             t.append(t[-1] + dt)
             self.step_size_cache.append(dt)
 
-        print(f'The force function was called {self.num_f_calls} times.')
+        # Interpolate results to desired time step if using adaptive time step
+        if method == self.RK45:
+            f = interp1d(np.array(t), np.array(y), axis=0)
+            t_interp = np.arange(t0, tf, first_dt)
+            y_interp = f(t_interp)
+            return t_interp, y_interp
+
         # Convert t, y to np arrays and return them
         return np.array(t), np.array(y)

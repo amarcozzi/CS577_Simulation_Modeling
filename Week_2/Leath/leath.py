@@ -60,14 +60,14 @@ class Leath:
 
     def grow_cluster(self):
         """
-        Iterate through each point in perimeter if uniform random [0,1] is less than p add perimeter point to cluster.
+        Iterate through each point in perimeter if uniform random [0,1] is less than p_init add perimeter point to cluster.
         Else mark point as inaccessible.
         Do something to keep cluster from leaving domain.
         """
         # Need a new list to store cluster points
         new_cluster_pts = []
 
-        # Loop through the active points in the perimeter, add the point the cluster with probability p
+        # Loop through the active points in the perimeter, add the point the cluster with probability p_init
         active_perimeter = [k for k, v in self.perimeter.items() if bool(v)]
         for pt in active_perimeter:
             if self.p >= np.random.rand():
@@ -127,7 +127,7 @@ class Leath:
 # Values for leath cluster
 N = 300
 p = 0.8
-# p = 0.5927
+# p_init = 0.5927
 
 # Initialize a leath cluster
 leath = Leath(N, p=p, animate=False)

@@ -240,12 +240,12 @@ for p in np.linspace(0.2, .8, probs):
 
 fig1, ax = plt.subplots(2, 2)
 ax[0, 0].plot(rho[:-1, 0, 0], rho[:-1, 1, 0], '.b')
-ax[0, 0].set_title('Density at p = 0.2')
+ax[0, 0].set_title('Density at p_init = 0.2')
 ax[0, 1].plot(rho[:-1, 0, 1], rho[:-1, 1, 1], '.b')
-ax[0, 1].set_title('Density at p = 0.4')
+ax[0, 1].set_title('Density at p_init = 0.4')
 ax[1, 0].plot(rho[:-1, 0, 2], rho[:-1, 1, 2], '.b')
-ax[1, 0].set_title('Density at p = 0.6')
+ax[1, 0].set_title('Density at p_init = 0.6')
 ax[1, 1].plot(rho[:-1, 0, 3], rho[:-1, 1, 3], '.b')
-ax[1, 1].set_title('Density at p = 0.8')
+ax[1, 1].set_title('Density at p_init = 0.8')
 plt.show()
 
