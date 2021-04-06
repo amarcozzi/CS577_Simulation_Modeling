@@ -1,8 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
-from prettytable import PrettyTable
-from ode_solver import ODESolver
 
 
 def n_body(t, y, p):
@@ -95,50 +91,28 @@ def total_energy(y, p):
 
     return KE, V, KE + V
 
+def subtract_velocity_center_of_mass(p, y):
 
-"""def plot_trajectory(y, y0, d):
-    fig = plt.figure(figsize=(5, 5))
-    ax = fig.add_subplot(111)
+    m = p['m']
+    n = len(m)
+    d = p['dimension']
 
-    x_min, x_max, y_min, y_max = 1e9, -1e9, 1e9, -1e9
-    for i in range(0, y0.size // d, d):
-        x_t = y[:, i]
-        y_t = y[:, i + 1]
-        if x_min > x_t.min(): x_min = x_t.min()
-        if x_max < x_t.max(): x_max = x_t.max()
-        if y_min > y_t.min(): y_min = y_t.min()
-        if y_max < y_t.max(): y_max = y_t.max()
+    half = y.size // 2
+    vel_vec = y[half:]
+    vel_matrix = vel_vec.reshape(n, d)
 
-    ph, = ax.plot(x_t, y_t, '-', color=[.7, .7, .7], linewidth=.5)
+    upper_x = 0
+    upper_y = 0
+    lower = 0
+    for i in range(n):
+        upper_x += m[i] * vel_matrix[i, 0]
+        upper_y += m[i] * vel_matrix[i, 1]
+        lower += m[i]
+    com = np.row_stack([upper_x / lower, upper_y / lower])
 
-    plt.xlim([1.2 * x_min, 1.2 * x_max])
-    plt.ylim([1.2 * y_min, 1.2 * y_max])
+    vel_vec[::2] -= com[0]
+    vel_vec[1::2] -= com[1]
+    y[half:] = vel_vec
 
-    ax.axis('off')
-    plt.show()"""
+    return y
 
-
-"""euler = np.array([0, 0, 1, 0, -1, 0, 0, 0, 0, .8, 0, -.8])
-lagrange = np.array([1., 0., -0.5, 0.866025403784439, -0.5, -0.866025403784439,
-                     0., 0.8, -0.692820323027551, -0.4, 0.692820323027551, -0.4])
-montgomery = np.array([0.97000436, -0.24308753, -0.97000436, 0.24308753, 0., 0.,
-                       0.466203685, 0.43236573, 0.466203685, 0.43236573,
-                       -0.93240737, -0.86473146])
-p3 = {'m': [1, 1, 1], 'G': 1, 'dimension': 2, 'force': gravitational, 'fix_first': False}
-
-y0 = lagrange
-p_init = p3
-dt = 0.01  # This is wrong - figure it out!
-t_span = [0, 100]
-
-solver = ODESolver()
-t_s, y_s = solver.solve_ode(n_body, t_span, y0, solver.RK45, p_init, first_step=dt, atol=1e-10, rtol=1e-14,
-                            S=0.98)"""
-
-# kinetic, potential, total = total_energy(y_s, p_init)
-
-# plt.plot(kinetic)
-# plt.plot(potential)
-# plt.plot(total)
-# plt.legend(['KE', 'V', 'Total'])
-# plt.show()
