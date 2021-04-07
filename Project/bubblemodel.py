@@ -32,7 +32,6 @@ class Bubble:
         y_new = y_old + y_vel * dt
 
         self.pos = (x_new, y_new, z_new)
-        pass
 
 class BubbleModel:
     def __init__(self, L, V, theta_w):
@@ -62,6 +61,8 @@ class BubbleModel:
         # Add some default fuel parameters. We can imagine these changing
         self.burnout_time = 15  # seconds
 
+        self.project = np.array([])
+
         print('debug_init')
 
     def ignite_cells(self, rows, cols):
@@ -76,7 +77,8 @@ class BubbleModel:
             for x in cols:
                 # Track the burning cells and their burnout time
                 self.burning_cells.append((x, y))
-                self.burning_cells_clock.append(self.burnout_time)
+                burnout_time = np.random.normal(12, 5)
+                self.burning_cells_clock.append(burnout_time)
                 self.N += 1
 
                 # Compute the center of mass of the burning cells
@@ -100,35 +102,46 @@ class BubbleModel:
         if len(self.bubble_list) > 6:   # Cull bubbles to keep 6 bubbles
             self.bubble_list.pop(0)
 
-        # Update positions of the other 5 bubbles
+        # Update positions of the other 5 bubbles (ignore last bubble since it was just added)
         for bubble in self.bubble_list[:-1]:
             bubble.update_position(self.dt, self.V, self.wind_dir)
 
-        next_burning_cells = self.burning_cells
-        next_burning_cells_clock = self.burning_cells_clock
-        # Compute the fire spread vector
-        for cell, i in self.burning_cells, range(len(self.burning_cells)):
-            # Check if the cell should be extinguished
-            if self.burning_cells_clock > self.elapsed_time:
-                next_burning_cells.pop(i)
-                next_burning_cells_clock.pop(i)
-                self.world[cell[1], cell[0]] = 3
+        next_burning_cells = list()
+        next_burning_cells_clock = list()
+
+        # Loop over all of the burning cells
+        for cell, i in zip(self.burning_cells, range(len(self.burning_cells))):
+            # Check if the cell should be extinguished. If it is still burning, add it to the next burning cells list
+            if self.elapsed_time < self.burning_cells_clock[i]:
+                next_burning_cells.append(cell)                                 # Cell burns in next time step
+                next_burning_cells_clock.append(self.burning_cells_clock[i])    # how long it takes cell to burn out
+            # Extinguish the cell and move on
+            else:
+                self.world[cell[1], cell[0]] = 3    # Cell is extinguished, and not added to next step
                 break
 
-            # The cell continues to burn, find the vector to each bubble
-            vector_sum = np.zeros(3)
+            # The cell continues to burn, compute the fire spread vector
+            fire_wind_vec = np.zeros(3)
             for bubble in self.bubble_list:
-                pass
+                vec = np.array([bubble.pos[0] - cell[0], bubble.pos[1] - cell[1], bubble.pos[2]])
+                comp = np.power(vec, 3)
+                alpha = np.divide(1, comp, out=np.zeros_like(vec), where=comp!=0)
+                cell_to_bubble_vec = alpha * vec
+                fire_wind_vec += cell_to_bubble_vec
+            fire_wind_vec = fire_wind_vec/len(self.bubble_list)
+            # Project the 3D vector sum from the cell to the bubbles to 2D
+            print(fire_wind_vec)
 
 
+        self.elapsed_time += self.dt
         print('time-step debug')
 
 
 
 # Initialize a bubble model
 lattice_size = 10
-model = BubbleModel(lattice_size, 8, 0)
-model.ignite_cells([5], [5])
-model.do_one_time_step()
-model.do_one_time_step()
+model = BubbleModel(lattice_size, 0.5, 0)
+model.ignite_cells([5], [1])
+for i in range(10):
+    model.do_one_time_step()
 print('debug_main')
