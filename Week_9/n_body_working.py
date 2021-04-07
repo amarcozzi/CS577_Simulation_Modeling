@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
 from prettytable import PrettyTable
 from ode_solver import ODESolver
 
@@ -11,14 +13,12 @@ def n_body(t, y, p):
     t is our time vector
     y is the state vector of all the bodies:
     [x1, y1, z1, x2, y2, z2, vx1, vy1, vz1, etc...]
-    p is the object with our data
+    p_init is the object with our data
 
     note:
 
     returns dxdt
     """
-    # TODO: multiply m1 and m2
-    # TODO: fix_first
 
     # Get some constants and initialize
     N = len(p['m'])
@@ -38,8 +38,7 @@ def n_body(t, y, p):
             rij = pos_matrix[i, :] - pos_matrix[j, :]
 
             # Compute the force from body j onto body i
-            # Fij = p['force'](rij, p['mass'][i], p['mass'][j], p['G']) * rij # old calculation
-            Fij = (-p['G'] * p['m'][i] * p['m'][j] / np.power(np.linalg.norm(rij), 3)) * rij
+            Fij = p['force'](p['G'], p['m'][i], p['m'][j], rij)
 
             # Fill in the symmetric pieces of the force matrix
             Fmatrix[i, j, :] = Fij / p['m'][i]
@@ -49,6 +48,7 @@ def n_body(t, y, p):
     forces = np.sum(Fmatrix, axis=1)
 
     # flatten the forces matrix and combine it with the vector list
+    # TODO: Rework how you build these
     acc_vec = forces.flatten().tolist()
     dxdt = np.array([vel_vec, acc_vec]).flatten()
 
@@ -60,61 +60,85 @@ def n_body(t, y, p):
     return dxdt
 
 
-""" OLD FORCE FUNCTION
-    def force_function(vec, m1, m2, G):
-    f = -G * m1 * m2 / np.power(np.linalg.norm(vec), 3)
-    return f"""
+def gravitational(G, m1, m2, r):
+    """ Computes the gravitational force between two bodies with large mass """
+    return (-G * m1 * m2 / np.power(np.linalg.norm(r), 3)) * r
 
-"""
-TEST THE N BODY FUNCTION
-"""
-"""y_sample = np.array([1.382857, 0,
-                     0, 0.157030,
-                     -1.382857, 0,
-                     0, -0.157030,
-                     0, 0.584873,
-                     1.871935, 0,
-                     0, -0.584873,
-                     -1.871935, 0], dtype=np.float128)
 
-euler = np.array([0, 0, 1, 0, -1, 0, 0, 0, 0, .8, 0, -.8])
-four_body = np.array([1.382857, 0,
-                      0, 0.157030,
-                      -1.382857, 0,
-                      0, -0.157030,
-                      0, 0.584873,
-                      1.871935, 0,
-                      0, -0.584873,
-                      -1.871935, 0], dtype=np.float128)
-helium_1 = np.array([0, 0, 2, 0, -1, 0, 0, 0, 0, .95, 0, -1])
+def total_energy(y, p):
+    steps, dofs = y.shape
+    d = p['dimension']
+    N = len(p['m'])
+    half = dofs // 2
 
-p = {'m': [1, 1, 1], 'G': 1, 'dimension': 2, 'fix_first': False}
-p4 = {'m': [1, 1, 1, 1], 'G': 1, 'dimension': 2, 'fix_first': False}
-phe = {'m': [2, -1, -1], 'G': 1, 'dimension': 2, 'fix_first': True}
+    # KE = V = np.zeros(steps)
+    KE = np.zeros(steps)
+    V = np.zeros(steps)
+    for k in range(steps):
+        y_k = y[k, :]
+        pos_vec = y_k[:half]
+        vel_vec = y_k[half:]
+        pos_matrix = pos_vec.reshape(N, d)
+        vel_matrix = vel_vec.reshape(N, d)
 
-headings = ['RUN', 'x1', 'y1', 'x2', 'y2', 'x3', 'y3', 'vx1', 'vy1', 'vx2', 'vy2', 'vx3', 'vy3']
-t = PrettyTable(headings)
-t.add_row(['euler'] + list(n_body(0, euler, p)))
-t.add_row(['He'] + list(n_body(0, helium_1, phe)))
-print(t)
+        # This loop determines kinetic energy for each body
+        for i in range(0, N):
+            ke = (1 / 2) * p['m'][i] * np.square(np.linalg.norm(vel_matrix[i, :]))
+            KE[k] += ke
 
-headings = ['RUN', 'x1', 'y1', 'x2', 'y2', 'x3', 'y3', 'x4', 'y4', 'vx1', 'vy1', 'vx2', 'vy2', 'vx3', 'vy3', 'vx4',
-            'vy4']
-t = PrettyTable(headings)
-t.add_row(['4 body'] + list(n_body(0, four_body, p4)))
-print(t)"""
+        # This loop determines total potential energy
+        for i in range(0, N - 1):
+            for j in range(i + 1, N):
+                rij = pos_matrix[i, :] - pos_matrix[j, :]
+                pe = -(p['G'] * p['m'][i] * p['m'][j]) / np.linalg.norm(rij)
+                V[k] += pe
 
-""" ODE LIMITATIONS SECTION """
+    return KE, V, KE + V
+
+
+"""def plot_trajectory(y, y0, d):
+    fig = plt.figure(figsize=(5, 5))
+    ax = fig.add_subplot(111)
+
+    x_min, x_max, y_min, y_max = 1e9, -1e9, 1e9, -1e9
+    for i in range(0, y0.size // d, d):
+        x_t = y[:, i]
+        y_t = y[:, i + 1]
+        if x_min > x_t.min(): x_min = x_t.min()
+        if x_max < x_t.max(): x_max = x_t.max()
+        if y_min > y_t.min(): y_min = y_t.min()
+        if y_max < y_t.max(): y_max = y_t.max()
+
+    ph, = ax.plot(x_t, y_t, '-', color=[.7, .7, .7], linewidth=.5)
+
+    plt.xlim([1.2 * x_min, 1.2 * x_max])
+    plt.ylim([1.2 * y_min, 1.2 * y_max])
+
+    ax.axis('off')
+    plt.show()"""
+
+
 """euler = np.array([0, 0, 1, 0, -1, 0, 0, 0, 0, .8, 0, -.8])
-
+lagrange = np.array([1., 0., -0.5, 0.866025403784439, -0.5, -0.866025403784439,
+                     0., 0.8, -0.692820323027551, -0.4, 0.692820323027551, -0.4])
 montgomery = np.array([0.97000436, -0.24308753, -0.97000436, 0.24308753, 0., 0.,
                        0.466203685, 0.43236573, 0.466203685, 0.43236573,
                        -0.93240737, -0.86473146])
-lagrange = np.array([1., 0., -0.5, 0.866025403784439, -0.5, -0.866025403784439,
-                     0., 0.8, -0.692820323027551, -0.4, 0.692820323027551, -0.4])
+p3 = {'m': [1, 1, 1], 'G': 1, 'dimension': 2, 'force': gravitational, 'fix_first': False}
 
-p3 = {'m': [1, 1, 1], 'G': 1, 'dimension': 2, 'fix_first': False}
+y0 = lagrange
+p_init = p3
+dt = 0.01  # This is wrong - figure it out!
+t_span = [0, 100]
 
-ode_solver = ODESolver()
-tspan = [0, 100]
-t, y = ode_solver.solve_ode(n_body, tspan, euler, ode_solver.EulerRichardson, p3, first_step=1)"""
+solver = ODESolver()
+t_s, y_s = solver.solve_ode(n_body, t_span, y0, solver.RK45, p_init, first_step=dt, atol=1e-10, rtol=1e-14,
+                            S=0.98)"""
+
+# kinetic, potential, total = total_energy(y_s, p_init)
+
+# plt.plot(kinetic)
+# plt.plot(potential)
+# plt.plot(total)
+# plt.legend(['KE', 'V', 'Total'])
+# plt.show()
