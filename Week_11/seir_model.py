@@ -232,3 +232,4 @@ options = {'xatol': 1e-2, 'disp': True}
 
 # Run the optimization
 res = seir.optimize_model(params_optimize, params_fixed, method='nelder-mead', kwargs=options)
+seir.plot_results()
