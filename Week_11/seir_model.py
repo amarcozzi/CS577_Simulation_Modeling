@@ -147,7 +147,7 @@ class SEIRModel:
                   np.ones(self.model_weekly_deaths.size)
 
         # Compute the error of the computation
-        if self.data_weekly_deaths.size == self.model_weekly_deaths:
+        if self.data_weekly_deaths.shape == self.model_weekly_deaths.shape:
             square_error = np.square(self.data_weekly_deaths - self.model_weekly_deaths)
             sse_iter = np.sum(square_error)
         else:
