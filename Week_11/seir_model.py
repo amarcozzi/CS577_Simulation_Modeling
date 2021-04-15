@@ -137,14 +137,12 @@ class SEIRModel:
         """
         self.set_parameters(q=args[0], delta=args[1], gamma=args[2], death_rate=opt_params[-1], Eo_frac=args[3],
                             coefs=opt_params[:-1])
-        self.solution = integrate.solve_ivp(self.SEIR, (0, self.days_from_zero[-1]), self.y_init, 'RK45',
-                                            self.days_from_zero, atol=1e-6, rtol=1e-6)
+        self.solution = integrate.solve_ivp(self.SEIR, (0, self.days_from_zero[-1]), self.y_init, 'Radau',
+                                            self.days_from_zero)
         self.model_weekly_deaths = self._convert_cum_to_weekly()
 
         # Compute Ro of the solution
-        # TODO: This will change when beta is a function of time
-        self.Ro = np.polynomial.polynomial.polyval(self.days_from_zero[-1], self.p['beta']) * self.p['gamma'] * \
-                  np.ones(self.model_weekly_deaths.size)
+        self.Ro = np.polynomial.polynomial.polyval(self.days_from_zero, self.p['beta']) * self.p['gamma']
 
         # Compute the error of the computation
         if self.data_weekly_deaths.shape == self.model_weekly_deaths.shape:
@@ -152,17 +150,25 @@ class SEIRModel:
             sse_iter = np.sum(square_error)
         else:
             sse_iter = np.inf
+        if np.any(self.Ro < 0):
+            sse_iter = np.inf
 
         self.iters += 1
-        print(f'iteration {self.iters} has sse of: {sse_iter:20.2f} with params {opt_params}')
+        # seir.plot_results()
+        print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
+        print(f'iteration {self.iters} has params: {opt_params}')
         return sse_iter
 
     def optimize_model(self, opt_params: tuple, fixed_params: tuple, method: str = 'nelder-mead', kwargs=None):
         """ Runs optimization on the SEIR model """
         x0 = np.array(opt_params)
+        bnds = ((-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf),
+                (-np.inf, np.inf), (-np.inf, np.inf), (0, 1))
+        # bnds = ((-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf), (0.001, 0.02))
+
         result = optimize.minimize(self.get_SSE, x0, fixed_params, method,
-                                   options={'xatol': kwargs['xatol'], 'disp': kwargs['disp']},
-                                   callback=self._store_location)
+                                   bounds=bnds,
+                                   options={'disp': kwargs['disp']})
         return result
 
     def plot_results(self):
@@ -208,6 +214,9 @@ class SEIRModel:
     def _store_location(self, x):
         self.params_list.append(x)
 
+    def _return_Ro(self):
+        return self.Ro
+
     def _convert_cum_to_weekly(self):
         """ Converts the cumulative weekly model output to cumulative totals """
         cum_deaths = self.solution.y.T[:, 4]
@@ -221,15 +230,16 @@ class SEIRModel:
 population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
 seir = SEIRModel(population_data_file, deaths_data_file)
-seir.set_location('New York')
+seir.set_location('Pennsylvania')
 
 # Pack the Parameters
 #                   b0  b1 b2 b3 b4 b5 b6    d
-params_optimize = (0.095, 0, 0, 0, 0, 0, 0, 0.02)
+params_optimize = (0.095, 0, 0, 0, 0, 0.000, 0.0000, 0.005)
 #               q   delta gamma    E0
 params_fixed = (0.5, 6, 10, 0.00001)
-options = {'xatol': 1e-2, 'disp': True}
+# options = {'xatol': 1e-8, 'disp': True}
+options = {'disp': True}
 
 # Run the optimization
-res = seir.optimize_model(params_optimize, params_fixed, method='nelder-mead', kwargs=options)
+res = seir.optimize_model(params_optimize, params_fixed, method='trust-constr', kwargs=options)
 seir.plot_results()
