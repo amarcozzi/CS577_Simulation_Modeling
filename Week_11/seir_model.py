@@ -23,7 +23,7 @@ class SEIRModel:
         self.solution = None
         self.params_list = []
         self.days_from_zero = []
-        self.iters=0
+        self.iters = 0
 
     @staticmethod
     def _parse_data(pop, deaths):
@@ -60,7 +60,7 @@ class SEIRModel:
 
         # Compute terms in the system of ODE. Do this now since we repeat computations
         beta_eval = np.polynomial.polynomial.polyval(t, beta)
-        S_change = beta_eval * S * (I + q * E) / N
+        S_change = (beta_eval * S * (I + q * E)) / N
         E_change = E / delta
         I_change = I / gamma
 
@@ -135,40 +135,62 @@ class SEIRModel:
         2. run the SEIR model using the ODE solver, solve_ivp
         3. return an Sum Square Error by comparing model result to data.
         """
+        # Set the parameters given by the optimizer
         self.set_parameters(q=args[0], delta=args[1], gamma=args[2], death_rate=opt_params[-1], Eo_frac=args[3],
                             coefs=opt_params[:-1])
-        self.solution = integrate.solve_ivp(self.SEIR, (0, self.days_from_zero[-1]), self.y_init, 'Radau',
-                                            self.days_from_zero)
+
+        # Check that the parameters are physical
+        beta_eval = np.polynomial.polynomial.polyval(self.days_from_zero, self.p['beta'])
+        Ro_eval = beta_eval * self.p['gamma']
+
+        if np.any(beta_eval) < 0:
+            self.iters += 1
+            sse_iter = 10e20
+            print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
+            return sse_iter
+
+        if np.any(Ro_eval) < 0:
+            self.iters += 1
+            sse_iter = 10e20
+            print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
+            return sse_iter
+
+        if self.p['d'] < 0:
+            self.iters += 1
+            sse_iter = 10e20
+            print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
+            return sse_iter
+
+        # Run the IVP solver
+        try:
+            self.solution = integrate.solve_ivp(self.SEIR, (0, self.days_from_zero[-1]), self.y_init, 'RK45',
+                                                self.days_from_zero, dense_output=True)
+        except:
+            self.iters += 1
+            sse_iter = 10e20
+            print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
+            print(f'iteration {self.iters} has params: {opt_params}')
+            return sse_iter
         self.model_weekly_deaths = self._convert_cum_to_weekly()
 
-        # Compute Ro of the solution
-        self.Ro = np.polynomial.polynomial.polyval(self.days_from_zero, self.p['beta']) * self.p['gamma']
-
-        # Compute the error of the computation
         if self.data_weekly_deaths.shape == self.model_weekly_deaths.shape:
             square_error = np.square(self.data_weekly_deaths - self.model_weekly_deaths)
             sse_iter = np.sum(square_error)
         else:
-            sse_iter = np.inf
-        if np.any(self.Ro < 0):
-            sse_iter = np.inf
+            sse_iter = 10e20
 
+        self.Ro = Ro_eval
         self.iters += 1
         # seir.plot_results()
         print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
-        print(f'iteration {self.iters} has params: {opt_params}')
         return sse_iter
 
     def optimize_model(self, opt_params: tuple, fixed_params: tuple, method: str = 'nelder-mead', kwargs=None):
         """ Runs optimization on the SEIR model """
+        self.iters = 0
         x0 = np.array(opt_params)
-        bnds = ((-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf),
-                (-np.inf, np.inf), (-np.inf, np.inf), (0, 1))
-        # bnds = ((-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf), (0.001, 0.02))
-
         result = optimize.minimize(self.get_SSE, x0, fixed_params, method,
-                                   bounds=bnds,
-                                   options={'disp': kwargs['disp']})
+                                   options=options)
         return result
 
     def plot_results(self):
@@ -230,16 +252,20 @@ class SEIRModel:
 population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
 seir = SEIRModel(population_data_file, deaths_data_file)
-seir.set_location('Pennsylvania')
+seir.set_location('Wisconsin')
 
 # Pack the Parameters
 #                   b0  b1 b2 b3 b4 b5 b6    d
-params_optimize = (0.095, 0, 0, 0, 0, 0.000, 0.0000, 0.005)
+params_optimize = (0.08, 0, 0, 0, 0, 0, 0, 0.000166)
 #               q   delta gamma    E0
-params_fixed = (0.5, 6, 10, 0.00001)
-# options = {'xatol': 1e-8, 'disp': True}
-options = {'disp': True}
+params_fixed = (0.5, 6, 15, 1e-6)
+options = {'xatol': 1e-8, 'disp': True}
+# options = {'disp': True}
 
-# Run the optimization
-res = seir.optimize_model(params_optimize, params_fixed, method='trust-constr', kwargs=options)
+# Prime the pump with Powell
+res = seir.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options)
+seir.plot_results()
+
+# Use Powell's to run simplex
+res = seir.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options)
 seir.plot_results()

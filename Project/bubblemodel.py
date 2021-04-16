@@ -4,8 +4,10 @@ BY: A.L. Sullivan and I.K. Knight
 
 https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.89.6604&rep=rep1&type=pdf
 """
-
+import matplotlib.pyplot as plt
 import numpy as np
+from shapely.geometry import LineString, MultiLineString
+from matplotlib.collections import LineCollection
 
 class Bubble:
 
@@ -34,10 +36,45 @@ class Bubble:
         self.pos = (x_new, y_new, z_new)
 
 class BubbleModel:
-    def __init__(self, L, V, theta_w):
-        self.L = L  # The lattice is size LxL
+    def __init__(self, XB, YB, I, J, V, theta_w):
+        """
+        :param int X: Length of the domain in the X direction
+        :param int Y: Length of the domain in the Y direction
+        :param int I: Number of cells in the X direction
+        :param int J: Number of cells in the Y direction
+        :param float V: Wind speed
+        :param float theta_w: Wind direction in degrees
+        """
+        # Initialize the world
         # each cell exists in one of three states: unburnt-1, burning-2, burnt-3
-        self.world = np.zeros([L, L], dtype=np.int8)
+        self.world = np.zeros([J, I], dtype=np.int8)
+
+        # Create a cartesian grid of the world.
+        x0, x1 = XB
+        x_space = np.linspace(x0, x1, I)
+        y0, y1 = YB
+        y_space = np.linspace(y0, y1, J)
+        xx, yy = np.meshgrid(x_space, y_space)
+        self.grid = np.zeros([J, I, 2])
+        self.grid[:, :, 0] = xx
+        self.grid[:, :, 1] = yy
+
+        # Also create the grid as a series of lines
+        lines = []
+        for x in x_space:
+            lines.append(((x, y0), (x, y1)))
+        for y in y_space:
+            lines.append(((x0, y), (x1, y)))
+        self.grid_lines = MultiLineString(lines)
+
+        # Plot the line grid
+        self.fig, self.ax = plt.subplots()
+        lc = LineCollection(lines, color='gray', lw=1, alpha=0.5)
+        self.ax.add_collection(lc)
+        plt.xlim([x0-0.01, x1+0.01])
+        plt.ylim([y0-0.01, y1+0.01])
+
+
         self.bubble_list = list()
         self.burning_cells = list()
         self.burning_cells_clock = list()
@@ -55,7 +92,7 @@ class BubbleModel:
         self.unit_wind_vec = self.wind_vec / np.linalg.norm(self.wind_vec)
 
         # Keep track of the simulation time
-        self.elapsed_time = 0
+        self.time = 0
         self.dt = 1  # seconds
 
         # Add some default fuel parameters. We can imagine these changing
@@ -108,40 +145,96 @@ class BubbleModel:
 
         next_burning_cells = list()
         next_burning_cells_clock = list()
+        self.center_of_mass = np.zeros(2)
 
         # Loop over all of the burning cells
-        for cell, i in zip(self.burning_cells, range(len(self.burning_cells))):
+        for cell, k in zip(self.burning_cells, range(len(self.burning_cells))):
+            # Get row i and column j of the cell
+            j, i = cell
+
+            # Recall world coordinate (j, i) = cartesian coordinate (x, y)
+            cell_coord = np.array([self.grid[i, j, 0], self.grid[i, j, 1]])
+
             # Check if the cell should be extinguished. If it is still burning, add it to the next burning cells list
-            if self.elapsed_time < self.burning_cells_clock[i]:
-                next_burning_cells.append(cell)                                 # Cell burns in next time step
-                next_burning_cells_clock.append(self.burning_cells_clock[i])    # how long it takes cell to burn out
+            if self.time < self.burning_cells_clock[k]:
+                next_burning_cells.append(cell)
+                next_burning_cells_clock.append(self.burning_cells_clock[k])
             # Extinguish the cell and move on
             else:
-                self.world[cell[1], cell[0]] = 3    # Cell is extinguished, and not added to next step
+                self.world[j, i] = 3
                 break
 
             # The cell continues to burn, compute the fire spread vector
+            # cell_pos =
             fire_wind_vec = np.zeros(3)
             for bubble in self.bubble_list:
-                vec = np.array([bubble.pos[0] - cell[0], bubble.pos[1] - cell[1], bubble.pos[2]])
-                comp = np.power(vec, 3)
-                alpha = np.divide(1, comp, out=np.zeros_like(vec), where=comp!=0)
-                cell_to_bubble_vec = alpha * vec
-                fire_wind_vec += cell_to_bubble_vec
+                fire_wind_vec += self._compute_fire_wind(cell, bubble.pos)
             fire_wind_vec = fire_wind_vec/len(self.bubble_list)
-            # Project the 3D vector sum from the cell to the bubbles to 2D
-            print(fire_wind_vec)
 
+            # Sum the fire wind vector with the wind vector to get the resulting fire spread vector
+            fire_spread_vec = np.array([fire_wind_vec[0] + self.wind_vec[0], fire_wind_vec[1] + self.wind_vec[1]])
 
-        self.elapsed_time += self.dt
-        print('time-step debug')
+            # Determine which cells lie along the fire spread vector
+            cells_on_fire_spread_vec = self._find_cells_on_vector(cell_coord, fire_spread_vec)
+            print(cell, fire_spread_vec)
 
+            # Add the burning cells location to the center of mass
+            # self.center_of_mass += []
 
+        # Compute the center of mass for the current time step
+        self.center_of_mass[0] /= len(self.burning_cells)
+        self.center_of_mass[1] /= len(self.burning_cells)
+
+        # Update the burning cells and increment the time step
+        self.burning_cells = next_burning_cells
+        self.burning_cells_clock = next_burning_cells_clock
+        self.time += self.dt
+
+    def _find_cells_on_vector(self, start_pt, vector):
+        """ Given a vector in coordinates (x, y), this function returns all of the cells (in world coordinates)
+            that lie along the vector, starting from the start_position.
+        """
+        vector = [2, 1e-10]
+        end_pt = np.array([start_pt[0] + vector[0], start_pt[1] + vector[1]])
+        line = LineString((start_pt, end_pt))
+        # lc = LineCollection([line], color='red')
+        # self.ax.add_collection(lc)
+        # plt.show()
+
+        for k, segment in enumerate(line.difference(self.grid_lines)):
+            x, y = segment.xy
+            i, j = self._cartesian_to_mesh(x[1], y[1])
+            plt.plot(x, y)
+            plt.text(np.mean(x), np.mean(y), str(k))
+        plt.scatter(start_pt[0], start_pt[1], color='red')
+        plt.text(start_pt[0], start_pt[0], f'({start_pt[0]:.1f}, {start_pt[1]:.1f})')
+        plt.show()
+
+        return True
+
+    def _compute_fire_wind(self, cell_loc, bubble_loc):
+        """
+        This function computes the fire wind vector from a given cell to a given bubble. According to the paper, the
+        magnitude of the vector is based on the inverse square of the distance from the cell to the bubble.
+        """
+        vec = np.array([bubble_loc[0] - cell_loc[0], bubble_loc[1] - cell_loc[1], bubble_loc[2]])
+        comp = np.power(vec, 3)
+        alpha = np.divide(1, comp, out=np.zeros_like(vec), where=comp != 0)
+        vec_cell_to_bubble = alpha * vec
+
+        return vec_cell_to_bubble
+
+    def _cartesian_to_mesh(self, x, y):
+        """ Converts cartesian points x and y to row i and column j coordinates of the mesh """
+        i = (np.abs(self.grid[:, 0, 1] - y)).argmin()
+        j = (np.abs(self.grid[0,:, 0] - x)).argmin()
+
+        return i, j
 
 # Initialize a bubble model
 lattice_size = 10
-model = BubbleModel(lattice_size, 0.5, 0)
+model = BubbleModel(XB=(-5, 5), YB=(-5, 5), I=10, J=10, V=2, theta_w=0)
 model.ignite_cells([5], [1])
-for i in range(10):
+for count in range(10):
     model.do_one_time_step()
 print('debug_main')
