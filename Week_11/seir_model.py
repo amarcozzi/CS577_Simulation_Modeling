@@ -200,7 +200,7 @@ class SEIRModel:
         self.iters = 0
         x0 = np.array(opt_params)
         result = optimize.minimize(self.get_SSE, x0, fixed_params, method,
-                                   options=options)
+                                   options=kwargs)
         return result
 
     def plot_results(self):
@@ -261,26 +261,30 @@ class SEIRModel:
 # Load in the data and initialize the class instance
 population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
-seir = SEIRModel(population_data_file, deaths_data_file)
-seir.set_location('Montana')
+model = SEIRModel(population_data_file, deaths_data_file)
+model.set_location('Michigan')
 
 # Pack the Parameters
 #                   b0  b1 b2 b3 b4 b5 b6    d
 params_optimize = (0.08, 0.2, 0.04, -.1, 0.5, -0.3, -0.4, 0.000166)
-# jesse_params_optimize = (0.08232008031142314, 0.21191456767635256, 0.048853630929886295, -0.1123035915640471,
-#                         0.590565599767146, -0.3434894220493361, -0.4778608650714212, 0.0020937821193444854)
+# params_zero = (0.08, 0, 0, 0, 0, 0, 0, 0.02)
+# jesse_params_optimize = (0.08232008031142314, 0.21191456767635256, 0.048853630929886295, -0.1123035915640471, 0.590565599767146, -0.3434894220493361, -0.4778608650714212, 0.0020937821193444854)
 #               q   delta gamma    E0       beta_0  degree
 params_fixed = (0.5, 6,     15,     1e-6,   0.08,   6)
 
-options = {'disp': True}
+options_one = {'disp': True}
 
 # Prime the pump with Powell
-res = seir.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options)
-seir.plot_results()
+res = model.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options_one)
+model.plot_results()
 
 # Now do simplex
-options = {'xatol': 1e-8, 'disp': True}
-res = seir.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options)
-seir.plot_results()
+options_two = {'xatol': 1e-8, 'disp': True}
+res = model.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options_two)
+model.plot_results()
+
+# How about a BFGS now?
+# res = seir.optimize_model(params_optimize, params_fixed, method='BFGS', kwargs=options_one)
+# seir.plot_results()
 # seir.get_SSE(params_optimize, *params_fixed)
 # seir.plot_results()
