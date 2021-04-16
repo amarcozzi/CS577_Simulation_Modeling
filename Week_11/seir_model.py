@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from numpy.polynomial import polynomial
+from numpy.polynomial.polynomial import Polynomial
 from scipy import integrate
 from scipy import optimize
 
@@ -22,7 +22,7 @@ class SEIRModel:
         self.Ro = 0
         self.solution = None
         self.params_list = []
-        self.days_from_zero = []
+        self.days_from_zero = None
         self.iters = 0
 
     @staticmethod
@@ -59,7 +59,7 @@ class SEIRModel:
                                       self.p['N']
 
         # Compute terms in the system of ODE. Do this now since we repeat computations
-        beta_eval = np.polynomial.polynomial.polyval(t, beta)
+        beta_eval = beta(t)
         S_change = (beta_eval * S * (I + q * E)) / N
         E_change = E / delta
         I_change = I / gamma
@@ -73,7 +73,8 @@ class SEIRModel:
 
         return np.array([dS, dE, dI, dR, dD])
 
-    def set_parameters(self, q=0.5, delta=6, gamma=10, death_rate=0.01, Eo_frac=0.00001, coefs=None):
+    def set_parameters(self, q=0.5, delta=6, gamma=10, death_rate=0.01, Eo_frac=0.00001, coefs=None, beta_0=0.08,
+                       degree=6):
         """
         This simple routine simply sets the parameters for the model.
         Note they are not all unity, I want you to figure out the
@@ -89,9 +90,13 @@ class SEIRModel:
         beta_o     - a constant initial value of beta, will be changed in the optimization
         """
         # Set beta as a polynomial object
-        # beta = np.polynomial.Polynomial(coefs)
-        self.p['beta'] = coefs
-
+        if coefs is None:
+            beta_t = Polynomial.fit(self.days_from_zero, beta_0 * np.ones(self.days_from_zero.size),
+                                            deg=degree)
+        else:
+            beta_t = Polynomial.basis(degree, domain=[self.days_from_zero[0], self.days_from_zero[-1]])
+            beta_t.coef = coefs
+        self.p['beta'] = beta_t
         # Fill out the rest of the parameters from function arguments
         self.p['q'] = q
         self.p['delta'] = delta
@@ -127,6 +132,7 @@ class SEIRModel:
         self.days_from_zero = []
         for day in self.dates:
             self.days_from_zero.append((day - self.dates[0]).days)
+        self.days_from_zero = np.array(self.days_from_zero)
 
     def get_SSE(self, opt_params, *args):
         """
@@ -137,10 +143,14 @@ class SEIRModel:
         """
         # Set the parameters given by the optimizer
         self.set_parameters(q=args[0], delta=args[1], gamma=args[2], death_rate=opt_params[-1], Eo_frac=args[3],
-                            coefs=opt_params[:-1])
+                            coefs=opt_params[:-1], beta_0=args[4], degree=args[5])
 
         # Check that the parameters are physical
-        beta_eval = np.polynomial.polynomial.polyval(self.days_from_zero, self.p['beta'])
+        beta_eval = self.p['beta'](self.days_from_zero)
+        """plt.plot(self.days_from_zero, beta_eval)
+        plt.xlabel('t (days)')
+        plt.ylabel(r'$\beta(t)$')
+        plt.show()"""
         Ro_eval = beta_eval * self.p['gamma']
 
         if np.any(beta_eval) < 0:
@@ -149,11 +159,11 @@ class SEIRModel:
             print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
             return sse_iter
 
-        if np.any(Ro_eval) < 0:
+        """if np.any(Ro_eval) < 0:
             self.iters += 1
             sse_iter = 10e20
             print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
-            return sse_iter
+            return sse_iter"""
 
         if self.p['d'] < 0:
             self.iters += 1
@@ -163,7 +173,7 @@ class SEIRModel:
 
         # Run the IVP solver
         try:
-            self.solution = integrate.solve_ivp(self.SEIR, (0, self.days_from_zero[-1]), self.y_init, 'RK45',
+            self.solution = integrate.solve_ivp(self.SEIR, (0, self.days_from_zero[-1]), self.y_init, 'BDF',
                                                 self.days_from_zero, dense_output=True)
         except:
             self.iters += 1
@@ -218,7 +228,7 @@ class SEIRModel:
         I_line, = ax3.plot(self.dates, self.solution.y[2, :], c='y')
         R_line, = ax3.plot(self.dates, self.solution.y[3, :], c='g')
         R_per_pop_line, = ax4.plot(self.dates, self.solution.y[3, :] / self.p['N'], c='g')
-        herd_immunity_line, = ax4.plot(self.dates, 1 - (1 / self.Ro), c='k')
+        herd_immunity_line, = ax4.plot(self.dates, 1 - np.ones(len(self.dates)) * (1 / np.max(self.Ro)), c='k')
 
         # Set the titles, legends, axis, etc.
         ax1.set_title('Deaths')
@@ -252,20 +262,25 @@ class SEIRModel:
 population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
 seir = SEIRModel(population_data_file, deaths_data_file)
-seir.set_location('Wisconsin')
+seir.set_location('Montana')
 
 # Pack the Parameters
 #                   b0  b1 b2 b3 b4 b5 b6    d
-params_optimize = (0.08, 0, 0, 0, 0, 0, 0, 0.000166)
-#               q   delta gamma    E0
-params_fixed = (0.5, 6, 15, 1e-6)
-options = {'xatol': 1e-8, 'disp': True}
-# options = {'disp': True}
+params_optimize = (0.08, 0.2, 0.04, -.1, 0.5, -0.3, -0.4, 0.000166)
+# jesse_params_optimize = (0.08232008031142314, 0.21191456767635256, 0.048853630929886295, -0.1123035915640471,
+#                         0.590565599767146, -0.3434894220493361, -0.4778608650714212, 0.0020937821193444854)
+#               q   delta gamma    E0       beta_0  degree
+params_fixed = (0.5, 6,     15,     1e-6,   0.08,   6)
+
+options = {'disp': True}
 
 # Prime the pump with Powell
 res = seir.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options)
 seir.plot_results()
 
-# Use Powell's to run simplex
+# Now do simplex
+options = {'xatol': 1e-8, 'disp': True}
 res = seir.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options)
 seir.plot_results()
+# seir.get_SSE(params_optimize, *params_fixed)
+# seir.plot_results()
