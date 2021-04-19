@@ -262,7 +262,8 @@ class SEIRModel:
 population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
 model = SEIRModel(population_data_file, deaths_data_file)
-model.set_location('Michigan')
+model.set_location('California'
+                   '')
 
 # Pack the Parameters
 #                   b0  b1 b2 b3 b4 b5 b6    d
