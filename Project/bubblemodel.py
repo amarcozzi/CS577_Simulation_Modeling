@@ -5,8 +5,11 @@ BY: A.L. Sullivan and I.K. Knight
 https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.89.6604&rep=rep1&type=pdf
 """
 import time
+
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
+from matplotlib.colors import ListedColormap
 from shapely.geometry import LineString, MultiLineString
 from matplotlib.collections import LineCollection
 
@@ -54,7 +57,7 @@ class BubbleModel:
 
         # Create our stochastic fuel parameters
         self.fuel_prob = np.random.random([num_y_cells, num_x_cells])
-        self.threshold = 0.95
+        self.threshold = 1
 
         # Create a cartesian grid of the world.
         x0, x1 = XB
@@ -112,13 +115,13 @@ class BubbleModel:
 
     def initialize_burn(self, rows, cols):
         """ Assigns the (row, col) pairs to state value 3 to represent ignited fuels """
-        # Set the positions in the state to burning
-        self.world[rows, cols] = 2
-
         # Add the burning cells to a list
         com_x = 0
         com_y = 0
         for y, x in zip(rows, cols):
+            # Set the positions in the state to burning
+            self.world[y, x] = 2
+
             # Track the burning cells and their burnout time
             self.burning_cells.append((y, x))
             burnout_time = np.random.normal(12, 5)
@@ -128,7 +131,9 @@ class BubbleModel:
             self._increment_com(y, x)
         self.center_of_mass[0] /= len(self.burning_cells)
         self.center_of_mass[1] /= len(self.burning_cells)
-        print(self.center_of_mass)
+
+        new_bubble = Bubble((self.center_of_mass[0], self.center_of_mass[1], 0), 5)
+        self.bubble_list.append(new_bubble)
 
     def do_one_time_step(self):
         """
@@ -168,15 +173,15 @@ class BubbleModel:
                 self._increment_com(i, j)
             # Extinguish the cell and move on
             else:
-                self.world[j, i] = 3
-                break
+                self.world[i, j] = 3
+                continue
 
             # The cell continues to burn, compute the fire spread vector
             # cell_pos =
             fire_wind_vec = np.zeros(3)
             for bubble in self.bubble_list:
                 fire_wind_vec += self._compute_fire_wind(cell_coord, bubble.pos)
-            fire_wind_vec = fire_wind_vec / len(self.bubble_list)
+            fire_wind_vec = fire_wind_vec
 
             # Sum the fire wind vector with the wind vector to get the resulting fire spread vector
             fire_spread_vec = np.array([fire_wind_vec[0] + self.wind_vec[0], fire_wind_vec[1] + self.wind_vec[1]])
@@ -209,7 +214,7 @@ class BubbleModel:
             i, j = cell
             if self.fuel_prob[i, j] <= self.threshold and self.world[i, j] == 0:
                 successfully_ignited.append(cell)
-                clocks.append(self.burnout_time)
+                clocks.append(self.burnout_time + self.time)
                 self._increment_com(i, j)
                 self.world[i, j] = 2
         return successfully_ignited, clocks
@@ -252,12 +257,12 @@ class BubbleModel:
         magnitude of the vector is based on the inverse square of the distance from the cell to the bubble.
         """
         vec = np.array([bubble_loc[0] - cell_loc[0], bubble_loc[1] - cell_loc[1], bubble_loc[2]])
-        # comp = np.power(vec, 2)
-        # alpha = np.divide(1, comp, out=np.zeros_like(vec), where=comp != 0)
-        # vec_cell_to_bubble = alpha * vec
+        r = np.power(np.linalg.norm(vec), 2)
+        alpha_abs = np.divide(1, r, out=np.zeros_like(vec), where=r != 0)
+        alpha = np.power(np.power(alpha_abs, 2), 1/2)
+        vec_cell_to_bubble = alpha * vec
 
-        # return vec_cell_to_bubble
-        return vec
+        return vec_cell_to_bubble
 
     def _cartesian_to_mesh(self, x, y):
         """ Converts cartesian points x and y to row i and column j coordinates of the mesh """
@@ -272,21 +277,48 @@ class BubbleModel:
 
 
 # Initialize a bubble model
-X_length = 160
-Y_length = 160
-model = BubbleModel(XB=(-X_length // 2, X_length // 2), YB=(-Y_length//2, Y_length//2), num_x_cells=X_length,
-                    num_y_cells=Y_length, V=2, theta_w=45)
+X_length = 80
+Y_length = 40
+model = BubbleModel(XB=(-X_length // 2, X_length // 2), YB=(-Y_length // 2, Y_length // 2), num_x_cells=X_length,
+                    num_y_cells=Y_length, V=0.5, theta_w=0)
 
 # Start the fire
-ignition_line_rows = [i for i in range(Y_length//4, Y_length-Y_length//4)]
-ignition_line_cols = [0 for j in range(X_length//4, X_length-X_length//4)]
+ignition_line_rows = [i for i in range(Y_length // 4, Y_length - Y_length // 4)]
+ignition_line_cols = [0 for j in range(X_length // 4, X_length - X_length // 4)]
 model.initialize_burn(ignition_line_rows, ignition_line_cols)
 
 # Plot the fire effects
-fire_state = plt.imshow(model.world, interpolation='nearest', extent=[-5, 5, -5, 5])
+# Create custom colormaps for burning and for vegetation
+color_dict = {1: "white",
+              2: "red",
+              3: "dimgrey"}
+
+# We create a colormar from our list of colors
+cm = ListedColormap([color_dict[x] for x in color_dict.keys()])
+
+# Let's also define the description of each category
+labels = np.array(["No Fuel", "Available Fuel", "Burning", "Consumed"])
+
+# Prepare bins for the normalizer
+norm_bins = np.sort([*color_dict.keys()]) + 0.5
+norm_bins = np.insert(norm_bins, 0, np.min(norm_bins) - 1.0)
+
+# Make normalizer and formatter
+fig, ax = plt.subplots()
+norm = mpl.colors.BoundaryNorm(norm_bins, len(labels), clip=True)
+fmt = mpl.ticker.FuncFormatter(lambda x, pos: labels[norm(x)])
+fire_state = plt.imshow(model.world, cmap=cm, norm=norm, interpolation='nearest',
+                        extent=[-X_length // 2, X_length // 2, -Y_length // 2,
+                                Y_length // 2])
+diff = norm_bins[1:] - norm_bins[:-1]
+tickz = norm_bins[:-1] + diff / 2
+cb = fig.colorbar(fire_state, format=fmt, ticks=tickz)
+
+# Plot the center of mass
+plt.scatter(model.center_of_mass[0], model.center_of_mass[1], c='g')
 
 print('starting model')
 for count in range(100):
     model.do_one_time_step()
     fire_state.set_data(model.world)
-    pass
+    plt.scatter(model.center_of_mass[0], model.center_of_mass[1], c='g')

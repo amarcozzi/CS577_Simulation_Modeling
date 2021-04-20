@@ -180,8 +180,8 @@ class GreekModel:
         return p_b
 
 # Initialize the lattice
-lattice_size = 100
-model = GreekModel(lattice_size, 8, 180)
+lattice_size = 1000
+model = GreekModel(lattice_size, 8, 0)
 
 # Initial fuel/no fuel in the lattice
 fuel_probability = 1.0
@@ -219,7 +219,7 @@ fmt = mpl.ticker.FuncFormatter(lambda x, pos: labels[norm(x)])
 # Define the matplotlib goodies for an animation
 frames = 10000
 fig, ax = plt.subplots()
-world = ax.imshow(model.State, cmap=cm, norm=norm)
+world = ax.imshow(model.State, cmap=cm, norm=norm, interpolation='nearest')
 diff = norm_bins[1:] - norm_bins[:-1]
 tickz = norm_bins[:-1] + diff / 2
 cb = fig.colorbar(world, format=fmt, ticks=tickz)

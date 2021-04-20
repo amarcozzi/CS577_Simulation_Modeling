@@ -24,6 +24,7 @@ class SEIRModel:
         self.params_list = []
         self.days_from_zero = None
         self.iters = 0
+        self.location = None
 
     @staticmethod
     def _parse_data(pop, deaths):
@@ -36,7 +37,7 @@ class SEIRModel:
         deaths_data = pd.read_csv(deaths, date_parser=True)
         deaths_data = deaths_data[["End Date", "State", "COVID-19 Deaths", "Group"]]  # Read in just these columns
         deaths_data = deaths_data.loc[deaths_data['Group'] == "By Week"]  # Filter by weekly data
-        deaths_data['COVID-19 Deaths'] = deaths_data['COVID-19 Deaths'].fillna(0)  # Replace nan with 0
+        deaths_data['COVID-19 Deaths'] = deaths_data['COVID-19 Deaths'].fillna(1)  # Replace nan with 0
         deaths_data['End Date'] = pd.to_datetime(deaths_data['End Date'])  # Convert to dates
 
         return pop_data, deaths_data
@@ -79,7 +80,6 @@ class SEIRModel:
         This simple routine simply sets the parameters for the model.
         Note they are not all unity, I want you to figure out the
         appropriate parameter values.
-        location - location to be modeled
         q - the attenuation of the infectivity, gamma in the population that is E
         delta - the length of time of asymptomatic exposure
         gamma - the length of time of infection
@@ -118,6 +118,7 @@ class SEIRModel:
         data fields within the SEIR object appropriate time series of
         deaths from COVID-19.
         """
+
         # Get the population of the location
         loc_subframe = self.pdata.query(f"NAME == '{location}'")
         loc_pop = loc_subframe.POPESTIMATE2019.values[0]
@@ -147,23 +148,14 @@ class SEIRModel:
 
         # Check that the parameters are physical
         beta_eval = self.p['beta'](self.days_from_zero)
-        """plt.plot(self.days_from_zero, beta_eval)
-        plt.xlabel('t (days)')
-        plt.ylabel(r'$\beta(t)$')
-        plt.show()"""
         Ro_eval = beta_eval * self.p['gamma']
+        sse_iter = 0
 
-        if np.any(beta_eval) < 0:
+        if np.any(beta_eval < 0):
             self.iters += 1
             sse_iter = 10e20
             print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
             return sse_iter
-
-        """if np.any(Ro_eval) < 0:
-            self.iters += 1
-            sse_iter = 10e20
-            print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
-            return sse_iter"""
 
         if self.p['d'] < 0:
             self.iters += 1
@@ -179,10 +171,10 @@ class SEIRModel:
             self.iters += 1
             sse_iter = 10e20
             print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
-            print(f'iteration {self.iters} has params: {opt_params}')
             return sse_iter
         self.model_weekly_deaths = self._convert_cum_to_weekly()
 
+        # TODO: Cumulative sum vs sum
         if self.data_weekly_deaths.shape == self.model_weekly_deaths.shape:
             square_error = np.square(self.data_weekly_deaths - self.model_weekly_deaths)
             sse_iter = np.sum(square_error)
@@ -191,7 +183,6 @@ class SEIRModel:
 
         self.Ro = Ro_eval
         self.iters += 1
-        # seir.plot_results()
         print(f'iteration {self.iters} has sse of: {sse_iter:20.2f}')
         return sse_iter
 
@@ -262,8 +253,7 @@ class SEIRModel:
 population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
 model = SEIRModel(population_data_file, deaths_data_file)
-model.set_location('California'
-                   '')
+model.set_location('Pennsylvania')
 
 # Pack the Parameters
 #                   b0  b1 b2 b3 b4 b5 b6    d
@@ -271,21 +261,18 @@ params_optimize = (0.08, 0.2, 0.04, -.1, 0.5, -0.3, -0.4, 0.000166)
 # params_zero = (0.08, 0, 0, 0, 0, 0, 0, 0.02)
 # jesse_params_optimize = (0.08232008031142314, 0.21191456767635256, 0.048853630929886295, -0.1123035915640471, 0.590565599767146, -0.3434894220493361, -0.4778608650714212, 0.0020937821193444854)
 #               q   delta gamma    E0       beta_0  degree
-params_fixed = (0.5, 6,     15,     1e-6,   0.08,   6)
+params_fixed = (0.5, 6,     15,     1e-8,   0.08,   6)
 
 options_one = {'disp': True}
 
 # Prime the pump with Powell
 res = model.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options_one)
-model.plot_results()
 
 # Now do simplex
-options_two = {'xatol': 1e-8, 'disp': True}
+options_two = {'xatol': 1e-8, 'maxiter': len(res.x)*1000, 'adaptive': True, 'disp': True}
 res = model.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options_two)
-model.plot_results()
 
-# How about a BFGS now?
-# res = seir.optimize_model(params_optimize, params_fixed, method='BFGS', kwargs=options_one)
-# seir.plot_results()
-# seir.get_SSE(params_optimize, *params_fixed)
-# seir.plot_results()
+
+# TODO: Pick up R0 from the initial weeks
+# TODO: End Date
+# TODO: Option for verbose
