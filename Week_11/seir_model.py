@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -24,6 +25,8 @@ class SEIRModel:
         self.params_list = []
         self.days_from_zero = None
         self.iters = 0
+        self.location = None
+        self.Ro_threshold = 0
         self.location = None
 
     @staticmethod
@@ -92,7 +95,7 @@ class SEIRModel:
         # Set beta as a polynomial object
         if coefs is None:
             beta_t = Polynomial.fit(self.days_from_zero, beta_0 * np.ones(self.days_from_zero.size),
-                                            deg=degree)
+                                    deg=degree)
         else:
             beta_t = Polynomial.basis(degree, domain=[self.days_from_zero[0], self.days_from_zero[-1]])
             beta_t.coef = coefs
@@ -118,6 +121,7 @@ class SEIRModel:
         data fields within the SEIR object appropriate time series of
         deaths from COVID-19.
         """
+        self.location = location
 
         # Get the population of the location
         loc_subframe = self.pdata.query(f"NAME == '{location}'")
@@ -204,6 +208,9 @@ class SEIRModel:
         * The fraction of the population that has recovered as a function time.
         Observe that by passing a list of dates you can get a nicely formatted time axis.
         """
+        # Find a scalar Ro
+        self.Ro_threshold = np.mean(self.Ro[:5])
+
         # Initialize the dashboard
         fig = plt.figure(figsize=(20, 12))
         ax1 = fig.add_subplot(2, 2, 1)
@@ -219,7 +226,7 @@ class SEIRModel:
         I_line, = ax3.plot(self.dates, self.solution.y[2, :], c='y')
         R_line, = ax3.plot(self.dates, self.solution.y[3, :], c='g')
         R_per_pop_line, = ax4.plot(self.dates, self.solution.y[3, :] / self.p['N'], c='g')
-        herd_immunity_line, = ax4.plot(self.dates, 1 - np.ones(len(self.dates)) * (1 / np.max(self.Ro)), c='k')
+        herd_immunity_line, = ax4.plot(self.dates, 1 - np.ones(len(self.dates)) * (1 / self.Ro_threshold), c='k')
 
         # Set the titles, legends, axis, etc.
         ax1.set_title('Deaths')
@@ -234,11 +241,19 @@ class SEIRModel:
 
         plt.show()
 
-    def _store_location(self, x):
-        self.params_list.append(x)
+    def write_df(self):
+        """ Writes the model output to a pandas dataframe """
+        # Create a location string
+        location_list = []
+        for count in range(len(self.dates)):
+            location_list.append(self.location)
 
-    def _return_Ro(self):
-        return self.Ro
+        df = pd.DataFrame({'Location': location_list,
+                           'Date': model.dates,
+                           'Data Weekly Deaths': model.data_weekly_deaths,
+                           'Model Weekly Deaths': model.model_weekly_deaths})
+
+        return df
 
     def _convert_cum_to_weekly(self):
         """ Converts the cumulative weekly model output to cumulative totals """
@@ -252,16 +267,14 @@ class SEIRModel:
 # Load in the data and initialize the class instance
 population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
-model = SEIRModel(population_data_file, deaths_data_file)
-model.set_location('Pennsylvania')
 
-# Pack the Parameters
-#                   b0  b1 b2 b3 b4 b5 b6    d
+""" Everything below will be in a for loop """
+state = 'Montana'
+model = SEIRModel(population_data_file, deaths_data_file)
+model.set_location(state)
+
 params_optimize = (0.08, 0.2, 0.04, -.1, 0.5, -0.3, -0.4, 0.000166)
-# params_zero = (0.08, 0, 0, 0, 0, 0, 0, 0.02)
-# jesse_params_optimize = (0.08232008031142314, 0.21191456767635256, 0.048853630929886295, -0.1123035915640471, 0.590565599767146, -0.3434894220493361, -0.4778608650714212, 0.0020937821193444854)
-#               q   delta gamma    E0       beta_0  degree
-params_fixed = (0.5, 6,     15,     1e-8,   0.08,   6)
+params_fixed = (0.5, 6, 15, 1e-8, 0.08, 6)
 
 options_one = {'disp': True}
 
@@ -269,10 +282,13 @@ options_one = {'disp': True}
 res = model.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options_one)
 
 # Now do simplex
-options_two = {'xatol': 1e-8, 'maxiter': len(res.x)*1000, 'adaptive': True, 'disp': True}
+options_two = {'xatol': 1e-8, 'maxiter': len(res.x) * 1000, 'adaptive': True, 'disp': True}
 res = model.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options_two)
+model.plot_results()
 
+# Write out the data file
+data_frame = model.write_df()
+data_frame.to_json(f'./model_output/{state}.json')
 
-# TODO: Pick up R0 from the initial weeks
 # TODO: End Date
 # TODO: Option for verbose
