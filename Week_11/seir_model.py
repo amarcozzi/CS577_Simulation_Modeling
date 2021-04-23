@@ -147,8 +147,8 @@ class SEIRModel:
         3. return an Sum Square Error by comparing model result to data.
         """
         # Set the parameters given by the optimizer
-        self.set_parameters(q=args[0], delta=args[1], gamma=args[2], death_rate=opt_params[-1], Eo_frac=args[3],
-                            coefs=opt_params[:-1], beta_0=args[4], degree=args[5])
+        self.set_parameters(q=args[0], delta=args[1], gamma=args[2], death_rate=opt_params[-2], Eo_frac=opt_params[-1],
+                            coefs=opt_params[:-1], beta_0=args[3], degree=args[4])
 
         # Check that the parameters are physical
         beta_eval = self.p['beta'](self.days_from_zero)
@@ -267,14 +267,15 @@ class SEIRModel:
 # Load in the data and initialize the class instance
 population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
+df_dict = {}
 
 """ Everything below will be in a for loop """
-state = 'Montana'
+state = 'South Dakota'
 model = SEIRModel(population_data_file, deaths_data_file)
 model.set_location(state)
 
-params_optimize = (0.08, 0.2, 0.04, -.1, 0.5, -0.3, -0.4, 0.000166)
-params_fixed = (0.5, 6, 15, 1e-8, 0.08, 6)
+params_optimize = (0.08, 0.2, 0.04, -.1, 0.5, -0.3, -0.4, 0.000166, 1e-8)
+params_fixed = (0.5, 6, 15, 0.08, 6)
 
 options_one = {'disp': True}
 
@@ -282,9 +283,21 @@ options_one = {'disp': True}
 res = model.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options_one)
 
 # Now do simplex
-options_two = {'xatol': 1e-8, 'maxiter': len(res.x) * 1000, 'adaptive': True, 'disp': True}
+# options_two = {'xatol': 1e-8, 'maxiter': len(res.x) * 1000, 'adaptive': True, 'disp': True}
+options_two = {'xatol': 1e-8, 'disp': True}
 res = model.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options_two)
 model.plot_results()
+
+# Unpack everything into a list
+infected = model.solution.y[2, -1]
+recovered = model.solution.y[3, -1]
+deaths = model.solution.y[4, -1]
+coefs = res.x.tolist()
+
+
+df_data = [*coefs, infected, recovered, deaths, coefs]
+
+df_dict[state] = df_data
 
 # Write out the data file
 data_frame = model.write_df()
