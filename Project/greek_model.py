@@ -66,7 +66,6 @@ class GreekModel:
 
         # Compute the probability of burning
         # self.p_burn = ph * (1 + p_veg) * (1 + p_den) * p_w * p_s
-        print('debug')
 
     def initialize_state(self, p):
         """ Initializes the state to contain either burned or unburned """
@@ -179,58 +178,57 @@ class GreekModel:
 
         return p_b
 
+    def animate(self, frames, figsize):
+        # Create custom colormaps for burning and for vegetation
+        color_dict = {1: "bisque",
+                      2: "forestgreen",
+                      3: "red",
+                      4: "dimgrey"}
+
+        # We create a colormar from our list of colors
+        cm = ListedColormap([color_dict[x] for x in color_dict.keys()])
+
+        # Let's also define the description of each category
+        labels = np.array(["No Fuel", "Available Fuel", "Burning", "Consumed"])
+
+        # Prepare bins for the normalizer
+        norm_bins = np.sort([*color_dict.keys()]) + 0.5
+        norm_bins = np.insert(norm_bins, 0, np.min(norm_bins) - 1.0)
+
+        # Make normalizer and formatter
+        norm = mpl.colors.BoundaryNorm(norm_bins, len(labels), clip=True)
+        fmt = mpl.ticker.FuncFormatter(lambda x, pos: labels[norm(x)])
+
+        # Define the matplotlib goodies for an animation
+        fig, ax = plt.subplots(figsize=figsize)
+        world = ax.imshow(self.State, cmap=cm, norm=norm, interpolation='nearest')
+        diff = norm_bins[1:] - norm_bins[:-1]
+        tickz = norm_bins[:-1] + diff / 2
+        cb = fig.colorbar(world, format=fmt, ticks=tickz)
+
+        # Define a function for each step in the animation
+        def animate(i):
+            self.do_one_time_step()
+            world.set_data(self.State)
+
+        # Animate the fire model
+        anim = FuncAnimation(fig, animate, interval=200, frames=frames, repeat=False)
+        plt.close()
+
+        return anim
+
+
 # Initialize the lattice
-lattice_size = 1000
-model = GreekModel(lattice_size, 8, 0)
+"""lattice_size = 100
+model = GreekModel(lattice_size, 8, 90)
 
 # Initial fuel/no fuel in the lattice
 fuel_probability = 1.0
 model.initialize_state(fuel_probability)
 
 # Set an ignition point
-ignition_point_r = [lattice_size//2]
-ignition_point_c = [lattice_size//4]
+ignition_point_r = [lattice_size-1 for i in range(0, lattice_size)]
+ignition_point_c = [i for i in range(lattice_size)]
 model.ignite_fire(ignition_point_r, ignition_point_c)
 
-"""for i in range(50):
-    model.do_one_time_step()
-    pass"""
-
-# Create custom colormaps for burning and for vegetation
-color_dict = {1: "bisque",
-              2: "forestgreen",
-              3: "red",
-              4: "dimgrey"}
-
-# We create a colormar from our list of colors
-cm = ListedColormap([color_dict[x] for x in color_dict.keys()])
-
-# Let's also define the description of each category
-labels = np.array(["No Fuel", "Available Fuel", "Burning", "Consumed"])
-
-# Prepare bins for the normalizer
-norm_bins = np.sort([*color_dict.keys()]) + 0.5
-norm_bins = np.insert(norm_bins, 0, np.min(norm_bins) - 1.0)
-
-# Make normalizer and formatter
-norm = mpl.colors.BoundaryNorm(norm_bins, len(labels), clip=True)
-fmt = mpl.ticker.FuncFormatter(lambda x, pos: labels[norm(x)])
-
-# Define the matplotlib goodies for an animation
-frames = 10000
-fig, ax = plt.subplots()
-world = ax.imshow(model.State, cmap=cm, norm=norm, interpolation='nearest')
-diff = norm_bins[1:] - norm_bins[:-1]
-tickz = norm_bins[:-1] + diff / 2
-cb = fig.colorbar(world, format=fmt, ticks=tickz)
-
-
-# Define a function for each step in the animation
-def animate(i):
-    model.do_one_time_step()
-    world.set_data(model.State)
-
-
-# Animate the fire model
-anim = FuncAnimation(fig, animate, interval=200, frames=frames, repeat=False)
-plt.show()
+model.animate(1000)"""

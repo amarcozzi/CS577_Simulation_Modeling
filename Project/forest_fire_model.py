@@ -23,18 +23,25 @@ class ForestFireModel:
         self.t = t  # Initial percentage of landscape covered in trees
 
         # Track burning cells. Initially no cells are burning.
-        self.burning = np.zeros([self.L, self.L], dtype=np.int)
-        # DEBUG: Set one area to burning
-        self.burning[2, 2] = 1
+        self.burning = np.zeros([self.L, self.L], dtype=np.int8)
 
         # Initialize trees on the landscape
         random_trees = np.random.random((self.L, self.L))
-        self.trees = np.where(random_trees < self.t, 1, 0).astype(np.int)
-        # DEBUG make sure there's a tree in burning area
-        self.trees[2, 2] = 1
+        self.trees = np.where(random_trees < self.t, 1, 0).astype(np.int8)
+
+        # Initialize tree and fire counts
+        self.num_trees = [np.count_nonzero(self.trees == 1)]
+        self.num_fire = [0]
+
+        self.iters = 0
+        self.time_steps = [0]
 
     def do_one_step(self):
         """ Simulates one time step in the forest-fire system """
+        # Step 0) Preprocess tree/fire count lists for the new iteration
+        self.num_trees.append(0)
+        self.num_fire.append(0)
+
         # Step 1) Grow new trees
         self.grow_trees()
 
@@ -44,11 +51,16 @@ class ForestFireModel:
         # Step 3) Ignite trees with a lightning strike
         self.throw_lightning()
 
+        self.iters += 1
+        self.time_steps.append(self.iters)
+
     def grow_trees(self):
         """ This function grows new trees in empty cells with probability p_init """
         new_trees = np.random.random((self.L, self.L))
         condition = np.logical_and(self.trees == 0, new_trees < self.p)
         self.trees[condition] = 1
+
+        self.num_trees[-1] += self.num_trees[-2] + np.count_nonzero(condition)
 
     def grow_fire(self):
         """ If a tree is nearest neighbors with a burning tree, then that tree catches fire """
@@ -64,7 +76,7 @@ class ForestFireModel:
         nn = signal.convolve2d(self.burning, k, mode='same', boundary='wrap')
 
         # Check if a cell contains a tree, and if it neighbors a burning cell
-        condition = np.logical_and(nn > 0, self.trees == 1).astype(np.bool)
+        condition = np.logical_and(nn > 0, self.trees == 1).astype(bool)
 
         # Light all of the cells on fire for which the condition is true
         self.burning[condition] = 1
@@ -73,18 +85,85 @@ class ForestFireModel:
         self.burning[prev_burn] = 0
         self.trees[prev_burn] = 0
 
+        # Remove trees that are now on fire, increment number of burning cells
+        num_converted_cells = np.count_nonzero(condition)
+        self.num_trees[-1] -= num_converted_cells
+        self.num_fire[-1] += num_converted_cells
+
     def throw_lightning(self):
         """ Randomly ignites a tree with probability f """
         lightning_prob = np.random.random((self.L, self.L))
         strikes = np.where(lightning_prob < self.f, True, False)
-        condition = np.logical_and(strikes == 1, self.trees == 1).astype(np.bool)
+        condition = np.logical_and(strikes == 1, self.trees == 1).astype(bool)
 
         # Set locations where lightning strikes AND there is a tree to burning
         self.burning[condition] = 1
 
+        # Remove trees that are now on fire, increment number of burning cells
+        num_converted_cells = np.count_nonzero(condition)
+        self.num_trees[-1] -= num_converted_cells
+        self.num_fire[-1] += num_converted_cells
 
-# Create a landscape
-landscape = ForestFireModel(100, p=0.002, f=0.00001, t=.5)
+    def animate_forest(self, frames, figsize):
+        """ Runs an instance of the forest with an animated plot """
+        # Create custom colormaps for burning and for vegetation
+        # burn_cmap = LinearSegmentedColormap.from_list('burn_cmap', ['firebrick'], N=1)
+        veg_cmap = LinearSegmentedColormap.from_list('veg_cmap', ['black', 'forestgreen'], N=2)
+
+        # Define the matplotlib goodies for an animation
+        fig, ax = plt.subplots(figsize=figsize, constrained_layout=False)
+        veg_image = ax.imshow(self.trees, cmap=veg_cmap)
+        burn_data = np.ma.masked_where(self.burning < 0.05, self.burning)
+        burn_image = ax.imshow(burn_data, cmap='Spectral')
+
+        # Define a function for each step in the animation
+        def animate(i):
+            self.do_one_step()
+            veg_image.set_data(self.trees)
+            burn_data = np.ma.masked_where(self.burning < 0.05, self.burning)
+            burn_image.set_data(burn_data)
+
+        # Animate iterations of life
+        anim = FuncAnimation(fig, animate, interval=100, frames=frames, repeat=False)
+        plt.close()
+
+        return anim
+
+    def plot_stats(self, figsize, normalized=False):
+        """ Plots the number of trees and fire cells over the course of the simulation """
+        if normalized:
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.scatter(self.num_fire, self.num_trees)
+            """trees_norm = np.array([self.num_trees]) / self.L**2
+            fire_norm = np.array([self.num_fire]) / self.L**2
+
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.plot(self.time_steps, trees_norm.ravel(), c='tab:green')
+            ax.plot(self.time_steps, fire_norm.ravel(), c='tab:red')"""
+
+        else:
+
+            figure, ax1 = plt.subplots(figsize=figsize)
+            ax1.plot(self.time_steps, self.num_trees, c='tab:green')
+            ax1.set_xlabel('Iterations (steps)')
+            ax1.set_ylabel('Number of Trees')
+            # ax1.tick_params(axis='y', labelcolor='tab:green')
+            ax1.tick_params(axis='y')
+
+            ax2 = ax1.twinx()
+            ax2.plot(self.time_steps, self.num_fire, c='tab:red')
+            ax2.set_ylabel('Number of Fire Cells')
+            # ax2.tick_params(axis='y', labelcolor='tab:red')
+            ax2.tick_params(axis='y')
+
+            figure.tight_layout()
+            figure.legend(['Tree Cells', 'Fire Cells'], loc="upper right", bbox_to_anchor=(1, 1),
+                          bbox_transform=ax1.transAxes)
+        plt.show()
+
+
+"""# Create a landscape
+landscape = ForestFireModel(250, p=0.002, f=0.00001, t=.5)
 
 # Create custom colormaps for burning and for vegetation
 # burn_cmap = LinearSegmentedColormap.from_list('burn_cmap', ['firebrick'], N=1)
@@ -93,7 +172,7 @@ veg_cmap = LinearSegmentedColormap.from_list('veg_cmap', ['black', 'forestgreen'
 # Define the matplotlib goodies for an animation
 frames = 10000
 fig, ax = plt.subplots(constrained_layout=False)
-veg_image = ax.imshow(landscape.trees, cmap=veg_cmap)
+veg_image = ax.imshow(landscape.trees, cmap=veg_cmap, interpolation='nearest')
 burn_data = np.ma.masked_where(landscape.burning < 0.05, landscape.burning)
 burn_image = ax.imshow(burn_data, cmap='Spectral')
 
@@ -108,4 +187,4 @@ def animate(i):
 
 # Animate iterations of life
 anim = FuncAnimation(fig, animate, interval=100, frames=frames, repeat=False)
-plt.show()
+plt.show()"""

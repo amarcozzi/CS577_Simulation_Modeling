@@ -11,6 +11,7 @@ import matplotlib as mpl
 import numpy as np
 from matplotlib.colors import ListedColormap
 from shapely.geometry import LineString, MultiLineString
+from scipy import ndimage
 from matplotlib.collections import LineCollection
 
 
@@ -57,7 +58,7 @@ class BubbleModel:
 
         # Create our stochastic fuel parameters
         self.fuel_prob = np.random.random([num_y_cells, num_x_cells])
-        self.threshold = .90
+        self.threshold = 1
 
         # Create a cartesian grid of the world.
         x0, x1 = XB
@@ -129,9 +130,10 @@ class BubbleModel:
             self.burning_cells_clock.append(burnout_time)
 
             # Compute the center of mass of the burning cells
-            self._increment_com(y, x)
-        self.center_of_mass[0] /= len(self.burning_cells)
-        self.center_of_mass[1] /= len(self.burning_cells)
+            # self._increment_com(y, x)
+        # self.center_of_mass[0] /= len(self.burning_cells)
+        # self.center_of_mass[1] /= len(self.burning_cells)
+        self._compute_center_of_mass(self.burning_cells)
 
         # new_bubble = Bubble((self.center_of_mass[0], self.center_of_mass[1], 0), 5)
         # self.bubble_list.append(new_bubble)
@@ -148,12 +150,14 @@ class BubbleModel:
         # "Wobble" the wind
         self._wobble_wind()
 
+        self._compute_center_of_mass(self.burning_cells)
+
         # Add a new bubble to the world
-        new_bubble = Bubble((self.center_of_mass[0] + self.wind_vec[0]*self.dt,
-                             self.center_of_mass[1] + self.wind_vec[1]*self.dt, 0), 5)
+        new_bubble = Bubble((self.center_of_mass[0],
+                             self.center_of_mass[1], 0), 5)
         # new_bubble = Bubble((self.center_of_mass[0], self.center_of_mass[1], 0), 5)
         self.bubble_list.append(new_bubble)
-        if len(self.bubble_list) > 8:  # Cull bubbles to keep 6 bubbles
+        if len(self.bubble_list) > 6:  # Cull bubbles to keep 6 bubbles
             self.bubble_list.pop(0)
 
         # Update positions of the other 5 bubbles (ignore last bubble since it was just added)
@@ -162,7 +166,7 @@ class BubbleModel:
 
         next_burning_cells = list()
         next_burning_cells_clock = list()
-        self.center_of_mass = np.zeros(2)
+        # self.center_of_mass = np.zeros(2)
 
         # Loop over all of the burning cells
         for cell, k in zip(self.burning_cells, range(len(self.burning_cells))):
@@ -176,7 +180,7 @@ class BubbleModel:
             if self.time < self.burning_cells_clock[k]:
                 next_burning_cells.append(cell)
                 next_burning_cells_clock.append(self.burning_cells_clock[k])
-                self._increment_com(i, j)
+                # self._increment_com(i, j)
             # Extinguish the cell and move on
             else:
                 self.world[i, j] = 3
@@ -205,13 +209,33 @@ class BubbleModel:
             next_burning_cells_clock.extend(new_fire_clocks)
 
         # Compute the center of mass for the current time step
-        self.center_of_mass[0] /= len(next_burning_cells)
-        self.center_of_mass[1] /= len(next_burning_cells)
+        # self._compute_center_of_mass(next_burning_cells)
+        # self.center_of_mass[0] /= len(next_burning_cells)
+        # self.center_of_mass[1] /= len(next_burning_cells)
 
         # Update the burning cells and increment the time step
         self.burning_cells = next_burning_cells
         self.burning_cells_clock = next_burning_cells_clock
         self.time += self.dt
+
+    def _compute_center_of_mass(self, cells):
+        x_com = 0
+        y_com = 0
+        for cell in cells:
+            i, j = cell
+            cell_coord = np.array([self.grid[i, j, 0], self.grid[i, j, 1]])
+            status = self.world[i, j]
+            x_com += cell_coord[0]
+            y_com += cell_coord[1]
+
+        x_com /= len(cells)
+        y_com /= len(cells)
+
+        self.center_of_mass[0] = x_com
+        self.center_of_mass[1] = y_com
+        # active_cells = np.where(self.world==2, 1, 0)
+        # com = ndimage.measurements.center_of_mass(active_cells)
+        # print('d)')
 
     def _ignite_new_cells(self, cells):
         """ Ignites cells along the fire spread vector with some probability """
@@ -222,7 +246,7 @@ class BubbleModel:
             if self.fuel_prob[i, j] <= self.threshold and self.world[i, j] == 0:
                 successfully_ignited.append(cell)
                 clocks.append(np.random.normal(1, 0.1) + self.time)
-                self._increment_com(i, j)
+                # self._increment_com(i, j)
                 self.world[i, j] = 2
         return successfully_ignited, clocks
 
@@ -279,13 +303,13 @@ class BubbleModel:
 
         return i, j
 
-    def _increment_com(self, i, j):
+    """def _increment_com(self, i, j):
         self.center_of_mass[0] += self.grid[i, j, 0]
-        self.center_of_mass[1] += self.grid[i, j, 1]
+        self.center_of_mass[1] += self.grid[i, j, 1]"""
 
     def _wobble_wind(self):
         """ Adds a random wobble to the wind """
-        self.wind_dir = np.random.normal(self.wind_dir_mean, 0.05)
+        self.wind_dir = np.random.normal(self.wind_dir_mean, 0.025)
 
         # Compute wind as a vector and a unit vector
         x_vel = self.V * np.cos(self.wind_dir)
@@ -294,18 +318,18 @@ class BubbleModel:
 
 
 # Initialize a bubble model
-X_length = 10
-Y_length = 10
-I_cells = 80
-J_cells = 80
+X_length = 100
+Y_length = 100
+I_cells = 100
+J_cells = 100
 model = BubbleModel(XB=(0, X_length), YB=(0, Y_length), num_x_cells=I_cells,
-                    num_y_cells=J_cells, dt=0.1, V=4, theta_w=0)
+                    num_y_cells=J_cells, dt=1, V=4, theta_w=0)
 
 # Start the fire
-# ignition_line_rows = [i for i in range(I_cells // 4, I_cells - I_cells // 4)]
-# ignition_line_cols = [0 for j in range(J_cells // 4, J_cells - J_cells // 4)]
-ignition_line_rows = [i for i in range(0, I_cells)]
-ignition_line_cols = [0 for i in range(0, I_cells)]
+ignition_line_rows = [i for i in range(I_cells // 4, J_cells - J_cells // 4)]
+ignition_line_cols = [0 for j in range(J_cells // 4, I_cells - I_cells // 4)]
+# ignition_line_rows = [i for i in range(0, I_cells)]
+# ignition_line_cols = [0 for i in range(0, J_cells)]
 model.initialize_burn(ignition_line_rows, ignition_line_cols)
 
 # Plot the fire effects
@@ -328,7 +352,7 @@ norm_bins = np.insert(norm_bins, 0, np.min(norm_bins) - 1.0)
 fig, ax = plt.subplots()
 norm = mpl.colors.BoundaryNorm(norm_bins, len(labels), clip=True)
 fmt = mpl.ticker.FuncFormatter(lambda x, pos: labels[norm(x)])
-fire_state = plt.imshow(model.world, cmap=cm, norm=norm, interpolation='nearest',
+fire_state = plt.imshow(np.flip(model.world, axis=0), cmap=cm, norm=norm, interpolation='nearest',
                         extent=[0, X_length, 0, Y_length])
 diff = norm_bins[1:] - norm_bins[:-1]
 tickz = norm_bins[:-1] + diff / 2
@@ -337,17 +361,50 @@ cb = fig.colorbar(fire_state, format=fmt, ticks=tickz)
 # Plot the center of mass
 com_scat = plt.scatter(model.center_of_mass[0], model.center_of_mass[1], c='g')
 
-bubble_scat = plt.scatter([], [], c='b')
+bubble_scat = plt.scatter([], [], c='b', marker='o', s=10)
 
 print('starting model')
 for count in range(100):
     com_scat.remove()
     bubble_scat.remove()
     model.do_one_time_step()
-    fire_state.set_data(model.world)
+    fire_state.set_data(np.flip(model.world, axis=0))
     bubble_list = []
     for bubble in model.bubble_list:
         bubble_list.append(bubble.pos)
     bubble_scat = plt.scatter(*zip(*bubble_list), c='b')
     com_scat = plt.scatter(model.center_of_mass[0], model.center_of_mass[1], c='g')
-    plt.title(f'Simulation at {model.time} seconds')
+    plt.title(f'Simulation at {model.time:.1f} minutes')
+
+plt.show()
+
+im_dir = './images'
+
+"""fig, ax = plt.subplots(3, 2)
+model_40_seconds = plt.imread(f'{im_dir}/model_40_seconds.png')
+model_100_seconds = plt.imread(f'{im_dir}/model_100_seconds.png')
+model_200_seconds = plt.imread(f'{im_dir}/model_200_seconds.png')
+fire_40_seconds = plt.imread(f'{im_dir}/obvs_fire_40_seconds.jpg')
+fire_100_seconds = plt.imread(f'{im_dir}/obvs_fire_100_seconds.jpg')
+fire_200_seconds = plt.imread(f'{im_dir}/obvs_fire_200_seconds.jpg')
+ax[0,0].imshow(model_40_seconds)
+ax[0,0].set_xticks([])
+ax[0,0].set_yticks([])
+ax[1,0].imshow(model_100_seconds)
+ax[1,0].set_xticks([])
+ax[1,0].set_yticks([])
+ax[2,0].imshow(model_200_seconds)
+ax[2,0].set_xticks([])
+ax[2,0].set_yticks([])
+ax[0,1].imshow(fire_40_seconds)
+ax[0,1].set_xticks([])
+ax[0,1].set_yticks([])
+ax[1,1].imshow(fire_100_seconds)
+ax[1,1].set_xticks([])
+ax[1,1].set_yticks([])
+ax[2,1].imshow(fire_200_seconds)
+ax[2,1].set_xticks([])
+ax[2,1].set_yticks([])
+plt.subplots_adjust(wspace=-0.5, hspace=0.1)
+fig.savefig(f'{im_dir}/bubble_comparison.png', dpi=300)
+plt.show()"""

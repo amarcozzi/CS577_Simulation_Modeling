@@ -269,39 +269,47 @@ population_data_file = './data/nst-est2019-alldata.csv'
 deaths_data_file = './data/Provisional_COVID-19_Death_Counts_by_Week_Ending_Date_and_State.csv'
 df_dict = {}
 
+state_names = ["Alaska", "Alabama", "Arkansas", "Arizona", "California", "Colorado", "Connecticut",
+               "District of Columbia", "Delaware", "Florida", "Georgia", "Hawaii", "Iowa", "Idaho", "Illinois",
+               "Indiana", "Kansas", "Kentucky", "Louisiana", "Massachusetts", "Maryland", "Maine", "Michigan",
+               "Minnesota", "Missouri", "Mississippi", "Montana", "North Carolina", "North Dakota", "Nebraska",
+               "New Hampshire", "New Jersey", "New Mexico", "Nevada", "New York", "Ohio", "Oklahoma", "Oregon",
+               "Pennsylvania", "Puerto Rico", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas",
+               "Utah", "Virginia", "Vermont", "Washington", "Wisconsin", "West Virginia", "Wyoming"]
+
 """ Everything below will be in a for loop """
-state = 'South Dakota'
-model = SEIRModel(population_data_file, deaths_data_file)
-model.set_location(state)
+for state in state_names:
+    model = SEIRModel(population_data_file, deaths_data_file)
+    model.set_location(state)
 
-params_optimize = (0.08, 0.2, 0.04, -.1, 0.5, -0.3, -0.4, 0.000166, 1e-8)
-params_fixed = (0.5, 6, 15, 0.08, 6)
+    params_optimize = (0.08, 0.2, 0.04, -.1, 0.5, -0.3, -0.4, 0.000166, 1e-8)
+    params_fixed = (0.5, 6, 15, 0.08, 6)
 
-options_one = {'disp': True}
+    options_one = {'xtol': 1e-6, 'disp': True}
 
-# Prime the pump with Powell
-res = model.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options_one)
+    # Prime the pump with Powell
+    res = model.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options_one)
 
-# Now do simplex
-# options_two = {'xatol': 1e-8, 'maxiter': len(res.x) * 1000, 'adaptive': True, 'disp': True}
-options_two = {'xatol': 1e-8, 'disp': True}
-res = model.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options_two)
-model.plot_results()
+    # Now do simplex
+    options_two = {'xatol': 1e-8, 'maxiter': len(res.x) * 1000, 'adaptive': True, 'disp': True}
+    # options_two = {'xatol': 1e-8, 'disp': True}
+    res = model.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options_two)
 
-# Unpack everything into a list
-infected = model.solution.y[2, -1]
-recovered = model.solution.y[3, -1]
-deaths = model.solution.y[4, -1]
-coefs = res.x.tolist()
+    # Unpack everything into a list
+    infected = model.solution.y[2, -1]
+    recovered = model.solution.y[3, -1]
+    deaths = model.solution.y[4, -1]
+    coefs = res.x.tolist()
 
 
-df_data = [*coefs, infected, recovered, deaths, coefs]
+    df_data = [*coefs, infected, recovered, deaths]
 
-df_dict[state] = df_data
+    df_dict[state] = df_data
 
 # Write out the data file
-data_frame = model.write_df()
-data_frame.to_json(f'./model_output/{state}.json')
+json_f = json.dumps(df_dict)
+with open('dict_results.json', 'w') as f:
+    f.write(json_f)
 
 # TODO: End Date
 # TODO: Option for verbose
