@@ -291,8 +291,8 @@ for state in state_names:
     res = model.optimize_model(params_optimize, params_fixed, method='Powell', kwargs=options_one)
 
     # Now do simplex
-    options_two = {'xatol': 1e-8, 'maxiter': len(res.x) * 1000, 'adaptive': True, 'disp': True}
-    # options_two = {'xatol': 1e-8, 'disp': True}
+    # options_two = {'xatol': 1e-8, 'maxiter': len(res.x) * 1000, 'adaptive': True, 'disp': True}
+    options_two = {'xatol': 1e-8, 'disp': True}
     res = model.optimize_model(res.x, params_fixed, method='nelder-mead', kwargs=options_two)
 
     # Unpack everything into a list
