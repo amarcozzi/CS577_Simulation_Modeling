@@ -241,20 +241,6 @@ class SEIRModel:
 
         plt.show()
 
-    def write_df(self):
-        """ Writes the model output to a pandas dataframe """
-        # Create a location string
-        location_list = []
-        for count in range(len(self.dates)):
-            location_list.append(self.location)
-
-        df = pd.DataFrame({'Location': location_list,
-                           'Date': model.dates,
-                           'Data Weekly Deaths': model.data_weekly_deaths,
-                           'Model Weekly Deaths': model.model_weekly_deaths})
-
-        return df
-
     def _convert_cum_to_weekly(self):
         """ Converts the cumulative weekly model output to cumulative totals """
         cum_deaths = self.solution.y.T[:, 4]
@@ -277,8 +263,7 @@ state_names = ["Alaska", "Alabama", "Arkansas", "Arizona", "California", "Colora
                "Pennsylvania", "Puerto Rico", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas",
                "Utah", "Virginia", "Vermont", "Washington", "Wisconsin", "West Virginia", "Wyoming"]
 
-""" Everything below will be in a for loop """
-for state in state_names:
+for state, idx in zip(state_names, range(len(state_names))):
     model = SEIRModel(population_data_file, deaths_data_file)
     model.set_location(state)
 
@@ -299,12 +284,13 @@ for state in state_names:
     infected = model.solution.y[2, -1]
     recovered = model.solution.y[3, -1]
     deaths = model.solution.y[4, -1]
+    pop = model.p['N']
+    deaths_per_cap = deaths/pop
     coefs = res.x.tolist()
 
+    df_data = [str(state), int(pop), *coefs, float(infected), float(recovered), float(deaths), float(deaths_per_cap)]
 
-    df_data = [*coefs, infected, recovered, deaths]
-
-    df_dict[state] = df_data
+    df_dict[idx] = df_data
 
 # Write out the data file
 json_f = json.dumps(df_dict)
@@ -313,3 +299,21 @@ with open('dict_results.json', 'w') as f:
 
 # TODO: End Date
 # TODO: Option for verbose
+
+# Load in .json  dictionary
+"""import json
+
+with open('./dict_results.json') as f:
+    data_dict = json.load(f)
+
+d = {}
+for i in range(len(data_dict)):
+    k, v = data_dict[i].items()
+    d[i] = [k, *v]
+
+# df = pd.DataFrame(data_dict.items())
+# Create pandas df from dictionary
+df = pd.DataFrame.from_dict(d, orient='index', columns=['Location', 'x0', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6',
+                                                          'Death Rate', 'E0 Frac', 'Infected', 'Recovered',
+                                                          'Deaths'])
+print(df)"""
